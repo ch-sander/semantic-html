@@ -1,23 +1,82 @@
 from HTML_rdf_parser.utils import generate_uuid
 
+DEFAULT_CONTEXT={
+
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "schema": "http://schema.org/",
+    "doco": "http://purl.org/spar/doco/",
+    "dcterms": "http://purl.org/dc/terms/",
+    "@vocab": "https://semantic-html.org/vocab#",
+    "Note": "doco:Document",
+    "Structure": "doco:DiscourseElement",
+    "Locator": "ex:Locator",
+    "Doc": "doco:Section",
+    "Annotation": "schema:Comment",
+    "Quotation": "doco:BlockQuotation",
+    "text": {
+        "@id": "schema:text",
+        "@type": "xsd:string"
+    },
+    "html": {
+        "@id": "schema:html",
+        "@type": "xsd:string"
+    },
+    "note": {
+        "@id": "inNote",
+        "@type": "@id"
+    },
+    "structure": {
+        "@id": "inStructure",
+        "@type": "@id"
+    },
+    "locator": {
+        "@id": "hasLocator",
+        "@type": "@id"
+    },
+    "sameAs": {
+        "@id": "schema:sameAs",
+        "@type": "@id"
+    },
+    "doc": {
+        "@id": "dcterms:isPartOf",
+        "@type": "@id"
+    },
+    "level": {
+        "@id": "doco:hasLevel",
+        "@type": "xsd:int"
+    },
+    "start": {
+        "@id": "schema:startOffset",
+        "@type": "xsd:int"
+    },
+    "end": {
+        "@id": "schema:endOffset",
+        "@type": "xsd:int"
+    }
+
+}
+
+
+
 class BaseGraphItem:
     """Base class for all graph items with standardized fields."""
 
-    def __init__(self, type_, text=None, note_id=None, structure_id=None, locator_id=None, same_as=None):
-        self.data = {
-            "@id": generate_uuid(),
-            "@type": type_,
-        }
+    def __init__(self, type_, text=None, note_id=None,
+                 structure_id=None, locator_id=None,
+                 same_as=None, html=None):
+        self.data = {"@id": generate_uuid(), "@type": type_}
         if text is not None:
-            self.data["text"] =  {"@value": text.strip(), "@type":"xsd:string"}
+            self.data["text"] = text
+        if html is not None:
+            self.data["html"] = html
         if note_id is not None:
-            self.data["note"] = {"@id": note_id}
+            self.data["note"] = note_id
         if structure_id is not None:
-            self.data["structure"] = {"@id": structure_id}
+            self.data["structure"] = structure_id
         if locator_id is not None:
-            self.data["locator"] = {"@id": locator_id}
+            self.data["locator"] = locator_id
         if same_as is not None:
-            self.data["same:as"] = {"@id": same_as}
+            self.data["sameAs"] = same_as
 
     def to_dict(self):
         """Return the graph item as a dictionary."""
@@ -25,37 +84,58 @@ class BaseGraphItem:
 
 class NoteItem(BaseGraphItem):
     """Graph item representing a full note."""
-    def __init__(self, text, type_=["Note"], **kwargs):
-        super().__init__(type_=type_, text=text, **kwargs)
+    def __init__(self, text, type_=["Note"], html=None, note_id=None):
+        super().__init__(type_=type_, text=text,
+                         html=html, note_id=note_id)
 
 class StructureItem(BaseGraphItem):
     """Graph item representing a document structure element (e.g., heading)."""
-    def __init__(self, text, level, note_id, type_=["Structure"], **kwargs):
-        super().__init__(type_=type_, text=text, note_id=note_id, **kwargs)
-        self.data["level"] = {"@value": level, "@type":"xsd:int"}
+    def __init__(self, text, level, note_id,
+                 type_=["Structure"], structure_id=None, locator_id=None):
+        super().__init__(type_=type_, text=text,
+                         structure_id=structure_id,
+                         locator_id=locator_id,
+                         note_id=note_id)
+        self.data["level"] = level
 
 class LocatorItem(BaseGraphItem):
     """Graph item representing a locator (e.g., page reference)."""
-    def __init__(self, text, structure_id, note_id, type_=["Locator"], **kwargs):
-        super().__init__(type_=type_, text=text, structure_id=structure_id, note_id=note_id, **kwargs)
+    def __init__(self, text, structure_id, note_id,
+                 type_=["Locator"]):
+        super().__init__(type_=type_, text=text,
+                         structure_id=structure_id,
+                         note_id=note_id)
 
 class DocItem(BaseGraphItem):
     """Graph item representing a document text block."""
-    def __init__(self, text, structure_id, locator_id, note_id, type_=["Doc"], **kwargs):
-        super().__init__(type_=type_, text=text, structure_id=structure_id, locator_id=locator_id, note_id=note_id, **kwargs)
+    def __init__(self, text, structure_id, locator_id, note_id,
+                 type_=["Doc"]):
+        super().__init__(type_=type_, text=text,
+                         structure_id=structure_id,
+                         locator_id=locator_id,
+                         note_id=note_id)
 
 class AnnotationItem(BaseGraphItem):
     """Graph item representing an annotation."""
-    def __init__(self, text, start, end, doc_id, structure_id, locator_id, note_id, same_as=None, type_=["Annotation"], **kwargs):
-        super().__init__(type_=type_, text=text, structure_id=structure_id, locator_id=locator_id, note_id=note_id, same_as=same_as, **kwargs)
-        if int(start)>-1:
-            self.data.update({            
-                "start": {"@value": int(start), "@type":"xsd:int"},
-                "end": {"@value": int(end), "@type":"xsd:int"},
-                "doc": {"@id": doc_id}
-            })
+    def __init__(self, text, start, end, doc_id,
+                 structure_id=None, locator_id=None, note_id=None,
+                 same_as=None, type_=["Annotation"]):
+        super().__init__(type_=type_, text=text,
+                         structure_id=structure_id,
+                         locator_id=locator_id,
+                         note_id=note_id,
+                         same_as=same_as)
+        if start >= 0:
+            # Store offsets as raw ints; context defines xsd:int
+            self.data["start"] = start
+            self.data["end"] = end
+            self.data["doc"] = doc_id
 
 class QuotationItem(BaseGraphItem):
     """Graph item representing a quotation block."""
-    def __init__(self, text, structure_id, locator_id, note_id, type_="Quotation", **kwargs):
-        super().__init__(type_=type_, text=text, structure_id=structure_id, locator_id=locator_id, note_id=note_id, **kwargs)
+    def __init__(self, text, structure_id, locator_id, note_id,
+                 type_=["Quotation"]):
+        super().__init__(type_=type_, text=text,
+                         structure_id=structure_id,
+                         locator_id=locator_id,
+                         note_id=note_id)

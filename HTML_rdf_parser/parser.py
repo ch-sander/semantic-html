@@ -24,16 +24,17 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
     note_text = extract_text_lxml(html_cleaned)
     note_type = mapping.get('@type', 'Note')
 
-    note_item = NoteItem(note_text, type_=note_type)
+    note_item = NoteItem(note_text, type_=note_type, html = html_cleaned)
     if note_uri:
         note_item.data["@id"] = note_uri
     items.append(note_item.to_dict())
 
     current_structures_by_level = {}
+    doc_ids_by_tag = {}
+    doc_texts_by_tag = {}
     current_structure = None
     current_locator = None
-    current_doc_id = None
-    current_doc_text = None
+
 
     for tag in soup.find_all(True):
         tag_name = tag.name
@@ -60,8 +61,8 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
         if cls == "Document":
             doc_item = DocItem(text, structure_id=current_structure, locator_id=current_locator, note_id=note_id, type_=types)            
             items.append(doc_item.to_dict())
-            current_doc_id  = doc_item.data["@id"]
-            current_doc_text  = doc_item.data["text"]["@value"]
+            doc_ids_by_tag[id(tag)] = doc_item.data["@id"]
+            doc_texts_by_tag[id(tag)] = doc_item.data["text"]
         elif cls == "Locator":
             locator_item = LocatorItem(text, structure_id=current_structure, note_id=note_id, type_=types)
             items.append(locator_item.to_dict())
@@ -91,25 +92,37 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
             quotation_item = QuotationItem(text, structure_id=current_structure, locator_id=current_locator, note_id=note_id, type_=types)
             items.append(quotation_item.to_dict())
         elif cls == "Annotation":
-            if current_doc_text and text:
-                start = current_doc_text.find(text)
-            else:
-                start = -1
-            end = start + len(text)
+            # Determine if this annotation is within a Document tag
+            doc_id = None
+            start = -1
+            end = -1
+            # Search ancestors for a Document tag
+            for parent in tag.parents:
+                if id(parent) in doc_ids_by_tag:
+                    doc_id = doc_ids_by_tag[id(parent)]
+                    doc_text = doc_texts_by_tag[id(parent)]
+                    # Compute offsets only if text exists in this document
+                    if text and doc_text:
+                        start = doc_text.find(text)
+                        if start >= 0:
+                            end = start + len(text)
+                    break
+
             same_as = None
             link_tag = tag.find("a")
             if link_tag and link_tag.has_attr("href"):
                 same_as = link_tag["href"]
 
+            # Build annotation, include doc_id only if found
             annotation_item = AnnotationItem(
                 text=text,
                 start=start,
                 end=end,
-                doc_id = current_doc_id, # if current_doc_id else note_id,
+                doc_id=doc_id,
                 structure_id=current_structure,
                 locator_id=current_locator,
                 note_id=note_id,
-                same_as=same_as, 
+                same_as=same_as,
                 type_=types
             )
             items.append(annotation_item.to_dict())
@@ -118,7 +131,7 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
     #     if idx > 0:
     #         items[idx+1]["hasParentStructure"] = {"@id": structure_lookup[idx-1][1]}
 
-    context = mapping.get('@context', None)
+    context = mapping.get('@context', DEFAULT_CONTEXT)
 
     jsonld_result = {
         "@graph": items
