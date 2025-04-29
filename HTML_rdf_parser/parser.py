@@ -53,6 +53,11 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
         if not match:
             continue
 
+        expected_class = match.get("class_name")
+        if expected_class:
+            if not (tag.has_attr("class") and expected_class in tag.get("class", [])):
+                continue
+
         cls = match["class"]
         types = match.get("types")
         note_id = note_item.data["@id"]
@@ -109,9 +114,12 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
                     break
 
             same_as = None
-            link_tag = tag.find("a")
-            if link_tag and link_tag.has_attr("href"):
-                same_as = link_tag["href"]
+            if tag.name == "a" and tag.has_attr("href"):
+                same_as = tag["href"]
+            else:
+                link_tag = tag.find("a")
+                if link_tag and link_tag.has_attr("href"):
+                    same_as = link_tag["href"]
 
             # Build annotation, include doc_id only if found
             annotation_item = AnnotationItem(
@@ -126,10 +134,6 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
                 type_=types
             )
             items.append(annotation_item.to_dict())
-
-    # for idx, (tag, structure_id) in enumerate(structure_lookup):
-    #     if idx > 0:
-    #         items[idx+1]["hasParentStructure"] = {"@id": structure_lookup[idx-1][1]}
 
     context = mapping.get('@context', DEFAULT_CONTEXT)
 

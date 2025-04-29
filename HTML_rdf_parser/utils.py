@@ -89,35 +89,41 @@ def annotate_html_with_rdfa(html: str, mapping: dict) -> str:
     return str(soup)
 
 def build_tag_style_lookup(mapping):
-    """Build lookup tables for tags and styles."""
+    """Build lookup tables for tags, styles, and optional classes."""
     tag_lookup = {}
     style_lookup = {}
+
     for cls, config in mapping.items():
         if cls.startswith("@"):
             continue  # Skip @context, @type etc.
+
         if cls == "Annotation":
             for subtype, subconfig in config.items():
                 tags = subconfig.get("tags", [])
                 styles = subconfig.get("styles", [])
                 types = subconfig.get("types", subtype)
+                class_name = subconfig.get("class")
                 if isinstance(tags, str):
                     tags = [tags]
                 if isinstance(styles, str):
                     styles = [styles]
                 for tag in tags:
-                    tag_lookup[tag] = {"class": "Annotation", "types": types}
+                    tag_lookup[tag] = {"class": "Annotation", "types": types, "class_name": class_name}
                 for style in styles:
-                    style_lookup[style] = {"class": "Annotation", "types": types}
+                    style_lookup[style] = {"class": "Annotation", "types": types, "class_name": class_name}
         else:
             tags = config.get("tags", [])
             styles = config.get("styles", [])
             types = config.get("types", cls)
+            class_name = config.get("class")
             if isinstance(tags, str):
                 tags = [tags]
             if isinstance(styles, str):
                 styles = [styles]
             for tag in tags:
-                tag_lookup[tag] = {"class": cls, "types": types}
+                tag_lookup[tag] = {"class": cls, "types": types, "class_name": class_name}
             for style in styles:
-                style_lookup[style] = {"class": cls, "types": types}
+                style_lookup[style] = {"class": cls, "types": types, "class_name": class_name}
+
     return tag_lookup, style_lookup
+
