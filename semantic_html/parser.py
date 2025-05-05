@@ -1,5 +1,5 @@
-from HTML_rdf_parser.models import *
-from HTML_rdf_parser.utils import *
+from semantic_html.models import *
+from semantic_html.utils import *
 from bs4 import BeautifulSoup
 
 def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_html: bool = False) -> dict:

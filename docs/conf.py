@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../dataria'))
+sys.path.insert(0, os.path.abspath('../semantic_html'))
 
 extensions = [
     'myst_parser',
@@ -9,7 +9,7 @@ extensions = [
 ]
 
 autoapi_type = 'python'
-autoapi_dirs = ['../HTML_rdf_parser']
+autoapi_dirs = ['../semantic_html']
 
 project = 'Semantic HTML'
 html_title = 'Semantic HTML Utility Documentation'

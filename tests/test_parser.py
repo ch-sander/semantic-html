@@ -1,4 +1,4 @@
-from HTML_rdf_parser.parser import parse_note
+from semantic_html.parser import parse_note
 
 def test_parse_note_minimal():
     html = """

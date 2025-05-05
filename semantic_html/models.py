@@ -1,4 +1,4 @@
-from HTML_rdf_parser.utils import generate_uuid
+from semantic_html.utils import generate_uuid
 import re
 
 DEFAULT_CONTEXT={

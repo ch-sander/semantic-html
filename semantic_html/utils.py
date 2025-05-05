@@ -78,7 +78,7 @@ def annotate_html_with_rdfa(html: str, mapping: dict) -> str:
     """
     Annotate an HTML string with RDFa 'typeof' attributes according to mapping.
     """
-    from HTML_rdf_parser.parser import build_tag_style_lookup
+    from semantic_html.parser import build_tag_style_lookup
 
     soup = BeautifulSoup(html, "html.parser")
     tag_lookup, style_lookup = build_tag_style_lookup(mapping)
