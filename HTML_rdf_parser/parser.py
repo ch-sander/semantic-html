@@ -15,15 +15,14 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
     Returns:
         dict: JSON-LD structured data or dict with jsonld and annotated_html.
     """
-    
+    regex_wrapper = RegexWrapper(mapping)
+    html = regex_wrapper.wrap(html)
     tag_lookup, style_lookup = build_tag_style_lookup(mapping)
     items = []
-
     html_cleaned = clean_html(html, mapping)
     soup = BeautifulSoup(html_cleaned, "html.parser")
     note_text = extract_text_lxml(html_cleaned)
     note_type = mapping.get('@type', 'Note')
-
     note_item = NoteItem(note_text, type_=note_type, html = html_cleaned)
     if note_uri:
         note_item.data["@id"] = note_uri
@@ -38,7 +37,20 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
 
     for tag in soup.find_all(True):
         tag_name = tag.name
-        match = tag_lookup.get(tag_name)
+        matches = tag_lookup.get(tag_name, [])
+        if not isinstance(matches, list):
+            matches = [matches]
+
+        match = None
+        for m in matches:
+            expected_class = m.get("class_name")
+            if expected_class:
+                if tag.has_attr("class") and expected_class in tag.get("class", []):
+                    match = m
+                    break
+            else:
+                match = m
+                break
 
         if not match and tag.has_attr("style"):
             styles = [
@@ -46,7 +58,19 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
                 for k, v in (item.split(":") for item in tag["style"].split(";") if ":" in item)
             ]
             for style in styles:
-                match = style_lookup.get(style)
+                style_matches = style_lookup.get(style, [])
+                if not isinstance(style_matches, list):
+                    style_matches = [style_matches]
+
+                for m in style_matches:
+                    expected_class = m.get("class_name")
+                    if expected_class:
+                        if tag.has_attr("class") and expected_class in tag.get("class", []):
+                            match = m
+                            break
+                    else:
+                        match = m
+                        break
                 if match:
                     break
 

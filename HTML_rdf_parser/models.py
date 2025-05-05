@@ -1,4 +1,5 @@
 from HTML_rdf_parser.utils import generate_uuid
+import re
 
 DEFAULT_CONTEXT={
 
@@ -55,8 +56,6 @@ DEFAULT_CONTEXT={
     }
 
 }
-
-
 
 class BaseGraphItem:
     """Base class for all graph items with standardized fields."""
@@ -139,3 +138,48 @@ class QuotationItem(BaseGraphItem):
                          structure_id=structure_id,
                          locator_id=locator_id,
                          note_id=note_id)
+
+class RegexWrapper:
+    def __init__(self, mapping: dict):
+        self.regex_entries = self._extract_regex_entries(mapping)
+
+    def _extract_regex_entries(self, mapping: dict) -> list:
+        entries = []
+
+        def recurse(submapping: dict):
+            for key, value in submapping.items():
+                if key == "IGNORE":
+                    continue 
+                if isinstance(value, dict):
+                    regex_list = value.get("regex")
+                    if regex_list:
+                        class_name = value.get("class", key)
+                        value.setdefault("class", class_name)
+                        tags = value.setdefault("tags", [])
+                        if "span" not in tags:
+                            tags.append("span")
+
+                        if isinstance(regex_list, str):
+                            regex_list = [regex_list]
+
+                        for pattern in regex_list:
+                            entries.append((class_name, pattern, value.get("types", [])))
+
+                    recurse(value)
+
+        recurse(mapping)
+        return entries
+
+    def wrap(self, html: str) -> str:
+        if not self.regex_entries:
+            return html
+
+        for cls, pattern, _ in self.regex_entries:
+            html = self._wrap_pattern(html, pattern, cls)
+        return html
+
+    def _wrap_pattern(self, html: str, pattern: str, cls: str) -> str:
+        def replacer(match):
+            return f'<span class="{cls}">{match.group(0)}</span>'
+        return re.sub(pattern, replacer, html)
+

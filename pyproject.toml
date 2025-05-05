@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "html_rdf_parser"
 version = "0.1.0"
-description = "Parse HTML Notes into RDF-compatible JSON-LD structures."
+description = "Parse HTML Notes into RDF-compatible JSON-LD structures via custom mapping."
 authors = [
     { name="Christoph Sander", email="c-sander@heimat.de" }
 ]
