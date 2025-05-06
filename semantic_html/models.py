@@ -1,5 +1,6 @@
 from semantic_html.utils import generate_uuid
 import re
+from datetime import datetime, timezone
 
 DEFAULT_CONTEXT={
 
@@ -7,6 +8,7 @@ DEFAULT_CONTEXT={
     "schema": "http://schema.org/",
     "doco": "http://purl.org/spar/doco/",
     "dcterms": "http://purl.org/dc/terms/",
+    "prov": "http://www.w3.org/ns/prov#",
     "@vocab": "https://semantic-html.org/vocab#",
     "Note": "doco:Document",
     "Structure": "doco:DiscourseElement",
@@ -53,6 +55,10 @@ DEFAULT_CONTEXT={
     "end": {
         "@id": "schema:endOffset",
         "@type": "xsd:int"
+    },
+    "generatedAtTime": {
+        "@id": "prov:generatedAtTime",
+        "@type": "xsd:dateTime"
     }
 
 }
@@ -62,8 +68,12 @@ class BaseGraphItem:
 
     def __init__(self, type_, text=None, note_id=None,
                  structure_id=None, locator_id=None,
-                 same_as=None, html=None):
-        self.data = {"@id": generate_uuid(), "@type": type_}
+                 same_as=None, html=None, metadata=None):
+        self.data = {
+            "@id": generate_uuid(),
+            "@type": type_,
+            "generatedAtTime": datetime.now(timezone.utc).isoformat()
+        }
         if text is not None:
             self.data["text"] = text
         if html is not None:
@@ -77,15 +87,20 @@ class BaseGraphItem:
         if same_as is not None:
             self.data["sameAs"] = same_as
 
+        if metadata:
+            for key, value in metadata.items():
+                self.data[key] = value
+
     def to_dict(self):
         """Return the graph item as a dictionary."""
         return self.data
 
 class NoteItem(BaseGraphItem):
     """Graph item representing a full note."""
-    def __init__(self, text, type_=["Note"], html=None, note_id=None):
+    def __init__(self, text, type_=["Note"], html=None, note_id=None, metadata=None):
         super().__init__(type_=type_, text=text,
-                         html=html, note_id=note_id)
+                         html=html, note_id=note_id,
+                         metadata=metadata)
 
 class StructureItem(BaseGraphItem):
     """Graph item representing a document structure element (e.g., heading)."""

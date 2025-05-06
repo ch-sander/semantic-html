@@ -2,7 +2,7 @@ from semantic_html.models import *
 from semantic_html.utils import *
 from bs4 import BeautifulSoup
 
-def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_html: bool = False, remove_empty_tags: bool = True) -> dict:
+def parse_note(html: str, mapping: dict, note_uri: str = None, metadata: dict = None, return_annotated_html: bool = False, remove_empty_tags: bool = True) -> dict:
     """
     Parses a HTML note HTML string into a JSON-LD dictionary (optionally also annotated HTML).
 
@@ -10,6 +10,7 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
         html (str): The HTML content of the HTML note.
         mapping (dict): A dictionary mapping classes, tags, styles, and types.
         note_uri (str, optional): If provided, used as the Note's @id.
+        metadata (dict, optional): A dictionary with additional keys to append for each item (e.g. provenance information).
         return_annotated_html (bool, optional): If True, also return RDFa-annotated HTML.
         remove_empty_tags (bool, optional): If True, empty tags will be removed from HTML before parsing.
 
@@ -24,7 +25,7 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, return_annotated_
     soup = BeautifulSoup(html_cleaned, "html.parser")
     note_text = extract_text_lxml(html_cleaned)
     note_type = mapping.get('@type', 'Note')
-    note_item = NoteItem(note_text, type_=note_type, html = html_cleaned)
+    note_item = NoteItem(note_text, type_=note_type, html = html_cleaned, metadata = metadata)
     if note_uri:
         note_item.data["@id"] = note_uri
     items.append(note_item.to_dict())
