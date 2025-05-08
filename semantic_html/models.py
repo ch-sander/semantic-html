@@ -70,8 +70,8 @@ class BaseGraphItem:
                  structure_id=None, locator_id=None,
                  same_as=None, html=None, metadata=None):
         self.data = {
-            "@id": generate_uuid(),
             "@type": type_,
+            "@id": generate_uuid(),            
             "generatedAtTime": datetime.now(timezone.utc).isoformat()
         }
         if text is not None:

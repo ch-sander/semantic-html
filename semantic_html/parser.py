@@ -17,163 +17,185 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, metadata: dict = 
     Returns:
         dict: JSON-LD structured data or dict with jsonld and annotated_html.
     """
-    regex_wrapper = RegexWrapper(mapping)
-    html = regex_wrapper.wrap(html)
-    tag_lookup, style_lookup = build_tag_style_lookup(mapping)
-    items = []
-    html_cleaned = clean_html(html, mapping, remove_empty_tags)
-    soup = BeautifulSoup(html_cleaned, "html.parser")
-    note_text = extract_text_lxml(html_cleaned)
-    note_type = mapping.get('@type', 'Note')
-    note_item = NoteItem(note_text, type_=note_type, html = html_cleaned, metadata = metadata)
-    if note_uri:
-        note_item.data["@id"] = note_uri
-    items.append(note_item.to_dict())
+    if not isinstance(html, str):
+        raise TypeError(f"'html' must be a string, got {type(html).__name__}")
 
-    current_structures_by_level = {}
-    doc_ids_by_tag = {}
-    doc_texts_by_tag = {}
-    current_structure = None
-    current_locator = None
+    if not html.strip():
+        raise ValueError("'html' is empty")
+
+    if not isinstance(mapping, dict):
+        raise TypeError(f"'mapping' must be a dict, got {type(mapping).__name__}")
+
+    if not mapping:
+        raise ValueError("'mapping' is empty")
+
+    if metadata is not None and not isinstance(metadata, dict):
+        raise TypeError(f"'metadata' must be a dict or None, got {type(metadata).__name__}")
+
+    if note_uri is not None and not isinstance(note_uri, str):
+        raise TypeError(f"'note_uri' must be a string or None, got {type(note_uri).__name__}")
+    try:
+
+        regex_wrapper = RegexWrapper(mapping)
+        html = regex_wrapper.wrap(html)
+        tag_lookup, style_lookup = build_tag_style_lookup(mapping)
+        items = []
+        html_cleaned = clean_html(html, mapping, remove_empty_tags)
+        soup = BeautifulSoup(html_cleaned, "html.parser")
+        note_text = extract_text_lxml(html_cleaned)
+        note_type = mapping.get('@type', 'Note')
+        note_item = NoteItem(note_text, type_=note_type, html = html_cleaned, metadata = metadata)
+        if note_uri:
+            note_item.data["@id"] = note_uri
+        items.append(note_item.to_dict())
+
+        current_structures_by_level = {}
+        doc_ids_by_tag = {}
+        doc_texts_by_tag = {}
+        current_structure = None
+        current_locator = None
 
 
-    for tag in soup.find_all(True):
-        tag_name = tag.name
-        matches = tag_lookup.get(tag_name, [])
-        if not isinstance(matches, list):
-            matches = [matches]
+        for tag in soup.find_all(True):
+            tag_name = tag.name
+            matches = tag_lookup.get(tag_name, [])
+            if not isinstance(matches, list):
+                matches = [matches]
 
-        match = None
-        for m in matches:
-            expected_class = m.get("class_name")
-            if expected_class:
-                if tag.has_attr("class") and expected_class in tag.get("class", []):
-                    match = m
-                    break
-            else:
-                match = m
-                break
-
-        if not match and tag.has_attr("style"):
-            styles = [
-                f"{k.strip()}:{v.strip()}"
-                for k, v in (item.split(":") for item in tag["style"].split(";") if ":" in item)
-            ]
-            for style in styles:
-                style_matches = style_lookup.get(style, [])
-                if not isinstance(style_matches, list):
-                    style_matches = [style_matches]
-
-                for m in style_matches:
-                    expected_class = m.get("class_name")
-                    if expected_class:
-                        if tag.has_attr("class") and expected_class in tag.get("class", []):
-                            match = m
-                            break
-                    else:
+            match = None
+            for m in matches:
+                expected_class = m.get("class_name")
+                if expected_class:
+                    if tag.has_attr("class") and expected_class in tag.get("class", []):
                         match = m
                         break
-                if match:
+                else:
+                    match = m
                     break
 
-        if not match:
-            continue
+            if not match and tag.has_attr("style"):
+                styles = [
+                    f"{k.strip()}:{v.strip()}"
+                    for k, v in (item.split(":") for item in tag["style"].split(";") if ":" in item)
+                ]
+                for style in styles:
+                    style_matches = style_lookup.get(style, [])
+                    if not isinstance(style_matches, list):
+                        style_matches = [style_matches]
 
-        expected_class = match.get("class_name")
-        if expected_class:
-            if not (tag.has_attr("class") and expected_class in tag.get("class", [])):
+                    for m in style_matches:
+                        expected_class = m.get("class_name")
+                        if expected_class:
+                            if tag.has_attr("class") and expected_class in tag.get("class", []):
+                                match = m
+                                break
+                        else:
+                            match = m
+                            break
+                    if match:
+                        break
+
+            if not match:
                 continue
 
-        cls = match["class"]
-        types = match.get("types")
-        note_id = note_item.data["@id"]
-        text = extract_text_lxml(str(tag))        
+            expected_class = match.get("class_name")
+            if expected_class:
+                if not (tag.has_attr("class") and expected_class in tag.get("class", [])):
+                    continue
 
-        if cls == "Document":
-            doc_item = DocItem(text, structure_id=current_structure, locator_id=current_locator, note_id=note_id, type_=types)            
-            items.append(doc_item.to_dict())
-            doc_ids_by_tag[id(tag)] = doc_item.data["@id"]
-            doc_texts_by_tag[id(tag)] = doc_item.data["text"]
-        elif cls == "Locator":
-            locator_item = LocatorItem(text, structure_id=current_structure, note_id=note_id, type_=types)
-            items.append(locator_item.to_dict())
-            current_locator = locator_item.data["@id"]
-        elif cls == "Structure":
-            level = int(tag.name[1]) if tag.name[1].isdigit() else 1
-            parent_structure_id = None
+            cls = match["class"]
+            types = match.get("types")
+            note_id = note_item.data["@id"]
+            text = extract_text_lxml(str(tag))        
 
-            for parent_level in reversed(range(1, level)):
-                if parent_level in current_structures_by_level:
-                    parent_structure_id = current_structures_by_level[parent_level]
-                    break
+            if cls == "Document":
+                doc_item = DocItem(text, structure_id=current_structure, locator_id=current_locator, note_id=note_id, type_=types)            
+                items.append(doc_item.to_dict())
+                doc_ids_by_tag[id(tag)] = doc_item.data["@id"]
+                doc_texts_by_tag[id(tag)] = doc_item.data["text"]
+            elif cls == "Locator":
+                locator_item = LocatorItem(text, structure_id=current_structure, note_id=note_id, type_=types)
+                items.append(locator_item.to_dict())
+                current_locator = locator_item.data["@id"]
+            elif cls == "Structure":
+                level = int(tag.name[1]) if tag.name[1].isdigit() else 1
+                parent_structure_id = None
 
-            structure_item = StructureItem(
-                text=text,
-                level=level,
-                note_id=note_id,
-                type_=types,
-                structure_id=parent_structure_id,
-                locator_id=current_locator
-            )
-            items.append(structure_item.to_dict())
+                for parent_level in reversed(range(1, level)):
+                    if parent_level in current_structures_by_level:
+                        parent_structure_id = current_structures_by_level[parent_level]
+                        break
 
-            current_structures_by_level[level] = structure_item.data["@id"]
-            current_structure = structure_item.data["@id"]
-        elif cls == "Quotation":
-            quotation_item = QuotationItem(text, structure_id=current_structure, locator_id=current_locator, note_id=note_id, type_=types)
-            items.append(quotation_item.to_dict())
-        elif cls == "Annotation":
-            # Determine if this annotation is within a Document tag
-            doc_id = None
-            start = -1
-            end = -1
-            # Search ancestors for a Document tag
-            for parent in tag.parents:
-                if id(parent) in doc_ids_by_tag:
-                    doc_id = doc_ids_by_tag[id(parent)]
-                    doc_text = doc_texts_by_tag[id(parent)]
-                    # Compute offsets only if text exists in this document
-                    if text and doc_text:
-                        start = doc_text.find(text)
-                        if start >= 0:
-                            end = start + len(text)
-                    break
+                structure_item = StructureItem(
+                    text=text,
+                    level=level,
+                    note_id=note_id,
+                    type_=types,
+                    structure_id=parent_structure_id,
+                    locator_id=current_locator
+                )
+                items.append(structure_item.to_dict())
 
-            same_as = None
-            if tag.name == "a" and tag.has_attr("href"):
-                same_as = tag["href"]
-            else:
-                link_tag = tag.find("a")
-                if link_tag and link_tag.has_attr("href"):
-                    same_as = link_tag["href"]
+                current_structures_by_level[level] = structure_item.data["@id"]
+                current_structure = structure_item.data["@id"]
+            elif cls == "Quotation":
+                quotation_item = QuotationItem(text, structure_id=current_structure, locator_id=current_locator, note_id=note_id, type_=types)
+                items.append(quotation_item.to_dict())
+            elif cls == "Annotation":
+                # Determine if this annotation is within a Document tag
+                doc_id = None
+                start = -1
+                end = -1
+                # Search ancestors for a Document tag
+                for parent in tag.parents:
+                    if id(parent) in doc_ids_by_tag:
+                        doc_id = doc_ids_by_tag[id(parent)]
+                        doc_text = doc_texts_by_tag[id(parent)]
+                        # Compute offsets only if text exists in this document
+                        if text and doc_text:
+                            start = doc_text.find(text)
+                            if start >= 0:
+                                end = start + len(text)
+                        break
 
-            # Build annotation, include doc_id only if found
-            annotation_item = AnnotationItem(
-                text=text,
-                start=start,
-                end=end,
-                doc_id=doc_id,
-                structure_id=current_structure,
-                locator_id=current_locator,
-                note_id=note_id,
-                same_as=same_as,
-                type_=types
-            )
-            items.append(annotation_item.to_dict())
+                same_as = None
+                if tag.name == "a" and tag.has_attr("href"):
+                    same_as = tag["href"]
+                else:
+                    link_tag = tag.find("a")
+                    if link_tag and link_tag.has_attr("href"):
+                        same_as = link_tag["href"]
 
-    context = mapping.get('@context', DEFAULT_CONTEXT)
+                # Build annotation, include doc_id only if found
+                annotation_item = AnnotationItem(
+                    text=text,
+                    start=start,
+                    end=end,
+                    doc_id=doc_id,
+                    structure_id=current_structure,
+                    locator_id=current_locator,
+                    note_id=note_id,
+                    same_as=same_as,
+                    type_=types
+                )
+                items.append(annotation_item.to_dict())
 
-    jsonld_result = {
-        "@graph": items
-    }
-    if context:
-        jsonld_result["@context"] = context
-
-    if return_annotated_html:
-        annotated_html = annotate_html_with_rdfa(html_cleaned, mapping)
-        return {
-            "jsonld": jsonld_result,
-            "RDFa": annotated_html
+        context = mapping.get('@context')
+        context = context if isinstance(context,dict) else DEFAULT_CONTEXT
+        jsonld_result = {
+            "@context": context,
+            "@graph": items
         }
-    else:
-        return jsonld_result
+
+
+        if return_annotated_html:
+            annotated_html = annotate_html_with_rdfa(html_cleaned, mapping)
+            return {
+                "jsonld": jsonld_result,
+                "RDFa": annotated_html
+            }
+        else:
+            return jsonld_result
+        
+    except Exception as e:
+        raise RuntimeError(f"Parsing failed: {e}") from e
