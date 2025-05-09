@@ -9,6 +9,7 @@ DEFAULT_CONTEXT={
     "doco": "http://purl.org/spar/doco/",
     "dcterms": "http://purl.org/dc/terms/",
     "prov": "http://www.w3.org/ns/prov#",
+    "owl": "http://www.w3.org/2002/07/owl#",
     "@vocab": "https://semantic-html.org/vocab#",
     "Note": "doco:Document",
     "Structure": "doco:DiscourseElement",
@@ -16,14 +17,6 @@ DEFAULT_CONTEXT={
     "Doc": "doco:Section",
     "Annotation": "schema:Comment",
     "Quotation": "doco:BlockQuotation",
-    "text": {
-        "@id": "schema:text",
-        "@type": "xsd:string"
-    },
-    "html": {
-        "@id": "schema:html",
-        "@type": "xsd:string"
-    },
     "note": {
         "@id": "inNote",
         "@type": "@id"
@@ -37,7 +30,7 @@ DEFAULT_CONTEXT={
         "@type": "@id"
     },
     "sameAs": {
-        "@id": "schema:sameAs",
+        "@id": "owl:sameAs",
         "@type": "@id"
     },
     "doc": {
@@ -48,19 +41,10 @@ DEFAULT_CONTEXT={
         "@id": "doco:hasLevel",
         "@type": "xsd:int"
     },
-    "start": {
-        "@id": "schema:startOffset",
-        "@type": "xsd:int"
-    },
-    "end": {
-        "@id": "schema:endOffset",
-        "@type": "xsd:int"
-    },
     "generatedAtTime": {
         "@id": "prov:generatedAtTime",
         "@type": "xsd:dateTime"
     }
-
 }
 
 class BaseGraphItem:
