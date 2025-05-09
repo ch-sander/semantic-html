@@ -3,7 +3,6 @@ import re
 from datetime import datetime, timezone
 
 DEFAULT_CONTEXT={
-
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "schema": "http://schema.org/",
     "doco": "http://purl.org/spar/doco/",
@@ -47,6 +46,9 @@ DEFAULT_CONTEXT={
     }
 }
 
+def clean_iri(val):
+    return re.sub(r'^"+|"+$', '', val.strip())
+
 class BaseGraphItem:
     """Base class for all graph items with standardized fields."""
 
@@ -58,18 +60,18 @@ class BaseGraphItem:
             "@id": generate_uuid(),            
             "generatedAtTime": datetime.now(timezone.utc).isoformat()
         }
-        if text is not None:
+        if text is not None: # TODO maybe implement @context here directly?
             self.data["text"] = text
         if html is not None:
             self.data["html"] = html
         if note_id is not None:
-            self.data["note"] = note_id
+            self.data["note"] = clean_iri(note_id)
         if structure_id is not None:
-            self.data["structure"] = structure_id
+            self.data["structure"] = clean_iri(structure_id)
         if locator_id is not None:
-            self.data["locator"] = locator_id
+            self.data["locator"] = clean_iri(locator_id)
         if same_as is not None:
-            self.data["sameAs"] = same_as
+            self.data["sameAs"] = clean_iri(same_as)
 
         if metadata:
             for key, value in metadata.items():
@@ -181,4 +183,3 @@ class RegexWrapper:
         def replacer(match):
             return f'<span class="{cls}">{match.group(0)}</span>'
         return re.sub(pattern, replacer, html)
-
