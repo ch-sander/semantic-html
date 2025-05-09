@@ -1,5 +1,5 @@
 from semantic_html.utils import generate_uuid
-import re
+import re, json
 from datetime import datetime, timezone
 
 DEFAULT_CONTEXT={
@@ -46,8 +46,12 @@ DEFAULT_CONTEXT={
     }
 }
 
-def clean_iri(val):
-    return re.sub(r'^"+|"+$', '', val.strip())
+
+# def clean_iri(val):
+#     try:
+#         return json.loads(val) if val.startswith('\\"') else val.strip('"')
+#     except Exception:
+#         return val
 
 class BaseGraphItem:
     """Base class for all graph items with standardized fields."""
@@ -65,13 +69,13 @@ class BaseGraphItem:
         if html is not None:
             self.data["html"] = html
         if note_id is not None:
-            self.data["note"] = clean_iri(note_id)
+            self.data["note"] = note_id
         if structure_id is not None:
-            self.data["structure"] = clean_iri(structure_id)
+            self.data["structure"] = structure_id
         if locator_id is not None:
-            self.data["locator"] = clean_iri(locator_id)
+            self.data["locator"] = locator_id
         if same_as is not None:
-            self.data["sameAs"] = clean_iri(same_as)
+            self.data["sameAs"] = same_as
 
         if metadata:
             for key, value in metadata.items():

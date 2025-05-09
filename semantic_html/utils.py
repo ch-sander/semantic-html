@@ -71,7 +71,7 @@ def clean_html(html: str, mapping: dict, remove_empty_tags: bool = True) -> str:
             if not text or text == '\xa0':
                 tag.decompose()
 
-    return str(soup)
+    return soup.decode()
 
 
 def annotate_html_with_rdfa(html: str, mapping: dict) -> str:
@@ -128,7 +128,7 @@ def annotate_html_with_rdfa(html: str, mapping: dict) -> str:
                 typeof_value = " ".join(typeof_value)
             tag["typeof"] = typeof_value
 
-    return str(soup)
+    return soup.decode()
 
 
 def build_tag_style_lookup(mapping):
