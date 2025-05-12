@@ -9,8 +9,8 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, metadata: dict = 
     Args:
         html (str): The HTML content of the HTML note.
         mapping (dict): A dictionary mapping classes, tags, styles, and types.
-        note_uri (str, optional): If provided, used as the Note's @id.
-        metadata (dict, optional): A dictionary with additional keys to append for each item (e.g. provenance information).
+        note_uri (str, optional): If provided, used as the Note's @id. Can also be a key in mapping dict.
+        metadata (dict, optional): A dictionary with additional keys to append for each item (e.g. provenance information) Can also be set as dict 'metadata' in mapping.
         return_annotated_html (bool, optional): If True, also return RDFa-annotated HTML.
         remove_empty_tags (bool, optional): If True, empty tags will be removed from HTML before parsing.
 
@@ -28,10 +28,12 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, metadata: dict = 
 
     if not mapping:
         raise ValueError("'mapping' is empty")
-
+    
+    metadata = metadata if metadata else mapping.pop("metadata") or None
     if metadata is not None and not isinstance(metadata, dict):
         raise TypeError(f"'metadata' must be a dict or None, got {type(metadata).__name__}")
 
+    note_uri = note_uri if note_uri else mapping.pop("@id") or None
     if note_uri is not None and not isinstance(note_uri, str):
         raise TypeError(f"'note_uri' must be a string or None, got {type(note_uri).__name__}")
     try:
