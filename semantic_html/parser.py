@@ -140,7 +140,7 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, metadata: dict = 
 
                 current_structures_by_level[level] = structure_item.data["@id"]
                 current_structure = structure_item.data["@id"]
-            elif cls == "Quotation":
+            elif cls == "Quotation": # TODO: store parent Document?
                 quotation_item = QuotationItem(text, structure_id=current_structure, locator_id=current_locator, note_id=note_id, type_=types)
                 items.append(quotation_item.to_dict())
             elif cls == "Annotation":
@@ -149,6 +149,7 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, metadata: dict = 
                 start = -1
                 end = -1
                 # Search ancestors for a Document tag
+                # TODO: what if no Document? Revert to note itself?
                 for parent in tag.parents:
                     if id(parent) in doc_ids_by_tag:
                         doc_id = doc_ids_by_tag[id(parent)]
