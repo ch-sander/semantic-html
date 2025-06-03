@@ -64,7 +64,7 @@ class BaseGraphItem:
             "@id": generate_uuid(),            
             "generatedAtTime": datetime.now(timezone.utc).isoformat()
         }
-        if text is not None: # TODO maybe implement @context here directly?
+        if text is not None:
             self.data["text"] = text
         if html is not None:
             self.data["html"] = html
