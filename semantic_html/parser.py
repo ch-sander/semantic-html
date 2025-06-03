@@ -155,6 +155,7 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, metadata: dict = 
                         doc_id = doc_ids_by_tag[id(parent)]
                         doc_text = doc_texts_by_tag[id(parent)]
                         # Compute offsets only if text exists in this document
+                        # TODO: Store prefix and sufix to get offsets
                         if text and doc_text:
                             start = doc_text.find(text)
                             if start >= 0:
