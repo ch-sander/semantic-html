@@ -53,9 +53,6 @@ class BaseGraphItem:
 
     def __init__(self, type_, text=None, metadata=None, selector=None, **kwargs):
 
-    # def __init__(self, type_, text=None, note_id=None,
-    #              structure_id=None, locator_id=None, doc_id=None,
-    #              same_as=None, html=None, metadata=None, selector = {}):
 
         self.data = {
             "@type": type_,
@@ -65,26 +62,7 @@ class BaseGraphItem:
         self.selector = selector  or {}
         self.data["text"] = text or ""
         self.wadm_metadata=kwargs.pop("wadm_meta", None).get("metadata", None)
-        # if text is not None:
-        #     self.data["text"] = text
-        # if html is not None:
-        #     self.data["html"] = html
-        # if note_id is not None:
-        #     self.data["note"] = note_id
-        # if structure_id is not None:
-        #     self.data["structure"] = structure_id
-        # if locator_id is not None:
-        #     self.data["locator"] = locator_id
-        # if doc_id is not None:
-        #     self.data["doc"] = doc_id
-        # if same_as is not None:
-        #     self.data["sameAs"] = same_as
 
-
-        # if metadata:
-        #     self.wadm_metadata = metadata
-        #     for key, value in metadata.items():
-        #         self.data[key] = value
 
         field_map = {
             "note_id": "note",
@@ -141,64 +119,6 @@ class QuotationItem(BaseGraphItem):
         type_ = kwargs.pop("type_", ["Quotation"])
         super().__init__(type_=type_, text=text, **kwargs)
 
-# class NoteItem(BaseGraphItem):
-#     """Graph item representing a full note."""
-#     def __init__(self, text, type_=["Note"], html=None, note_id=None, metadata=None):
-#         super().__init__(type_=type_, text=text,
-#                          html=html, note_id=note_id,
-#                          metadata=metadata)
-
-# class StructureItem(BaseGraphItem):
-#     """Graph item representing a document structure element (e.g., heading)."""
-#     def __init__(self, text, level, note_id, doc_id,
-#                  type_=["Structure"], structure_id=None, locator_id=None, selector = {}, metadata=None):
-#         super().__init__(type_=type_, text=text,
-#                          structure_id=structure_id,
-#                          locator_id=locator_id,
-#                          note_id=note_id, selector=selector, doc_id=doc_id,
-#                          metadata=metadata)
-#         self.data["level"] = level
-
-# class LocatorItem(BaseGraphItem):
-#     """Graph item representing a locator (e.g., page reference)."""
-#     def __init__(self, text, structure_id, note_id, doc_id,
-#                  type_=["Locator"], selector = {}, metadata=None):
-#         super().__init__(type_=type_, text=text,
-#                          structure_id=structure_id,
-#                          note_id=note_id, selector=selector, doc_id=doc_id,
-#                          metadata=metadata)
-
-# class DocItem(BaseGraphItem):
-#     """Graph item representing a document text block."""
-#     def __init__(self, text, structure_id, locator_id, note_id, doc_id,
-#                  type_=["Doc"], selector = {}, metadata=None):
-#         super().__init__(type_=type_, text=text,
-#                          structure_id=structure_id,
-#                          locator_id=locator_id,
-#                          note_id=note_id, selector=selector, doc_id=doc_id,
-#                          metadata=metadata)
-
-# class AnnotationItem(BaseGraphItem):
-#     """Graph item representing an annotation."""
-#     def __init__(self, text, doc_id,
-#                  structure_id, locator_id, note_id,
-#                  same_as, type_=["Annotation"], selector = {}, metadata=None):
-#         super().__init__(type_=type_, text=text,
-#                          structure_id=structure_id,
-#                          locator_id=locator_id,
-#                          note_id=note_id,
-#                          same_as=same_as, selector=selector, doc_id=doc_id,
-#                          metadata=metadata)            
-
-# class QuotationItem(BaseGraphItem):
-#     """Graph item representing a quotation block."""
-#     def __init__(self, text, structure_id, locator_id, note_id, doc_id,
-#                  type_=["Quotation"], selector = {}, metadata=None):
-#         super().__init__(type_=type_, text=text,
-#                          structure_id=structure_id,
-#                          locator_id=locator_id,
-#                          note_id=note_id, selector=selector, doc_id=doc_id,
-#                          metadata=metadata)
 
 class RegexWrapper:
     def __init__(self, mapping: dict):
