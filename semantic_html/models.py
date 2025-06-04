@@ -61,7 +61,8 @@ class BaseGraphItem:
         }
         self.selector = selector  or {}
         self.data["text"] = text or ""
-        self.wadm_metadata=kwargs.pop("wadm_meta", None).get("metadata", None)
+        wadm_meta = kwargs.pop("wadm_meta", None)
+        self.wadm_metadata = wadm_meta.get("metadata") if wadm_meta else None
 
 
         field_map = {
@@ -180,7 +181,7 @@ def generate_wadm_annotation(item):
         "body": []
     }
 
-    wadm.update(item.wadm_metadata)
+    if item.wadm_metadata: wadm.update(item.wadm_metadata)
 
     selector_items = []
 

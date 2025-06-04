@@ -16,7 +16,7 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, metadata: dict = 
         remove_empty_tags (bool, optional): If True, empty tags will be removed from HTML before parsing.
 
     Returns:
-        dict: JSON-LD structured data or dict with jsonld, wadm, and rdfa.
+        dict: dict with keys for JSON-LD, WADM, and RDFa.
     """
     if not isinstance(html, str):
         raise TypeError(f"'html' must be a string, got {type(html).__name__}")
@@ -202,7 +202,7 @@ def parse_note(html: str, mapping: dict, note_uri: str = None, metadata: dict = 
             
         complex_result= {"JSON-LD": jsonld_result}
         if wadm: complex_result["WADM"] = {
-                        "@context": wadm_meta.get("@context", WADM_CONTEXT), 
+                        "@context": wadm_meta.get("@context", WADM_CONTEXT) if wadm_meta else WADM_CONTEXT, 
                         "@graph": wadm_result
                     }
         if rdfa: 
