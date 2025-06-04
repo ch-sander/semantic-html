@@ -235,8 +235,7 @@ def generate_wadm_annotation(item):
     wadm["body"].append({
         "type": "SpecificResource",
         "source": data["@id"],
-        "purpose": "identifying",
-        "format": "text/plain"
+        "purpose": "identifying"
     })
 
     # body: tagging
@@ -246,7 +245,8 @@ def generate_wadm_annotation(item):
             wadm["body"].append({
                 "type": "TextualBody",
                 "value": t,
-                "purpose": "tagging"
+                "purpose": "tagging",
+                "format": "text/plain"
             })
 
     return wadm
