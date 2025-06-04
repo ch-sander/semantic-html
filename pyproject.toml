@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "semantic_html"
-version = "0.4.0"
+version = "0.5.0"
 description = "Parse HTML Notes into RDF-compatible JSON-LD structures via custom mapping."
 authors = [
     { name="Christoph Sander", email="c-sander@heimat.de" }

@@ -46,103 +46,79 @@ DEFAULT_CONTEXT={
     }
 }
 
-
-# def clean_iri(val):
-#     try:
-#         return json.loads(val) if val.startswith('\\"') else val.strip('"')
-#     except Exception:
-#         return val
+WADM_CONTEXT = "https://www.w3.org/ns/anno.jsonld"
 
 class BaseGraphItem:
     """Base class for all graph items with standardized fields."""
 
-    def __init__(self, type_, text=None, note_id=None,
-                 structure_id=None, locator_id=None,
-                 same_as=None, html=None, metadata=None):
+    def __init__(self, type_, text=None, metadata=None, selector=None, **kwargs):
+
+
         self.data = {
             "@type": type_,
             "@id": generate_uuid(),            
             "generatedAtTime": datetime.now(timezone.utc).isoformat()
         }
-        if text is not None: # TODO maybe implement @context here directly?
-            self.data["text"] = text
-        if html is not None:
-            self.data["html"] = html
-        if note_id is not None:
-            self.data["note"] = note_id
-        if structure_id is not None:
-            self.data["structure"] = structure_id
-        if locator_id is not None:
-            self.data["locator"] = locator_id
-        if same_as is not None:
-            self.data["sameAs"] = same_as
+        self.selector = selector  or {}
+        self.data["text"] = text or ""
+        self.wadm_metadata=kwargs.pop("wadm_meta", None).get("metadata", None)
 
-        if metadata:
-            for key, value in metadata.items():
-                self.data[key] = value
+
+        field_map = {
+            "note_id": "note",
+            "structure_id": "structure",
+            "locator_id": "locator",
+            "doc_id": "doc",
+            "same_as": "sameAs",
+            "html": "html"
+        }
+
+        for key, jsonld_key in field_map.items():
+            if key in kwargs and kwargs[key] is not None:
+                self.data[jsonld_key] = kwargs[key]
+
+        if metadata:            
+            self.data.update(metadata)
 
     def to_dict(self):
         """Return the graph item as a dictionary."""
         return self.data
-
+    
+    def to_wadm(self):
+        """Return a WADM-conformant dictionary representation."""
+        return generate_wadm_annotation(self)
+    
 class NoteItem(BaseGraphItem):
-    """Graph item representing a full note."""
-    def __init__(self, text, type_=["Note"], html=None, note_id=None, metadata=None):
-        super().__init__(type_=type_, text=text,
-                         html=html, note_id=note_id,
-                         metadata=metadata)
+    def __init__(self, text, **kwargs):
+        type_ = kwargs.pop("type_", ["Note"])
+        super().__init__(type_=type_, text=text, **kwargs)
 
 class StructureItem(BaseGraphItem):
-    """Graph item representing a document structure element (e.g., heading)."""
-    def __init__(self, text, level, note_id,
-                 type_=["Structure"], structure_id=None, locator_id=None):
-        super().__init__(type_=type_, text=text,
-                         structure_id=structure_id,
-                         locator_id=locator_id,
-                         note_id=note_id)
+    def __init__(self, text, level, **kwargs):
+        type_ = kwargs.pop("type_", ["Structure"])
+        super().__init__(type_=type_, text=text, **kwargs)
         self.data["level"] = level
 
 class LocatorItem(BaseGraphItem):
-    """Graph item representing a locator (e.g., page reference)."""
-    def __init__(self, text, structure_id, note_id,
-                 type_=["Locator"]):
-        super().__init__(type_=type_, text=text,
-                         structure_id=structure_id,
-                         note_id=note_id)
+    def __init__(self, text, **kwargs):
+        type_ = kwargs.pop("type_", ["Locator"])
+        super().__init__(type_=type_, text=text, **kwargs)
 
 class DocItem(BaseGraphItem):
-    """Graph item representing a document text block."""
-    def __init__(self, text, structure_id, locator_id, note_id,
-                 type_=["Doc"]):
-        super().__init__(type_=type_, text=text,
-                         structure_id=structure_id,
-                         locator_id=locator_id,
-                         note_id=note_id)
+    def __init__(self, text, **kwargs):
+        type_ = kwargs.pop("type_", ["Doc"])
+        super().__init__(type_=type_, text=text, **kwargs)
 
 class AnnotationItem(BaseGraphItem):
-    """Graph item representing an annotation."""
-    def __init__(self, text, start, end, doc_id,
-                 structure_id=None, locator_id=None, note_id=None,
-                 same_as=None, type_=["Annotation"]):
-        super().__init__(type_=type_, text=text,
-                         structure_id=structure_id,
-                         locator_id=locator_id,
-                         note_id=note_id,
-                         same_as=same_as)
-        if start >= 0:
-            # Store offsets as raw ints; context defines xsd:int
-            self.data["start"] = start
-            self.data["end"] = end
-            self.data["doc"] = doc_id
+    def __init__(self, text, **kwargs):
+        type_ = kwargs.pop("type_", ["Annotation"])
+        super().__init__(type_=type_, text=text, **kwargs)
 
 class QuotationItem(BaseGraphItem):
-    """Graph item representing a quotation block."""
-    def __init__(self, text, structure_id, locator_id, note_id,
-                 type_=["Quotation"]):
-        super().__init__(type_=type_, text=text,
-                         structure_id=structure_id,
-                         locator_id=locator_id,
-                         note_id=note_id)
+    def __init__(self, text, **kwargs):
+        type_ = kwargs.pop("type_", ["Quotation"])
+        super().__init__(type_=type_, text=text, **kwargs)
+
 
 class RegexWrapper:
     def __init__(self, mapping: dict):
@@ -187,3 +163,89 @@ class RegexWrapper:
         def replacer(match):
             return f'<span class="{cls}">{match.group(0)}</span>'
         return re.sub(pattern, replacer, html)
+    
+
+def generate_wadm_annotation(item):
+    data = item.data
+    selector = item.selector
+    wadm = {        
+        "@type": "Annotation",
+        "@id": generate_uuid(),
+        "created": datetime.now().isoformat(),
+        "motivation": "identifying" if "doc" in data else "describing",
+        "target": {
+            "source": data.get("doc", data.get("note", data.get("@id","n/a"))),
+            "selector": []
+        },
+        "body": []
+    }
+
+    wadm.update(item.wadm_metadata)
+
+    selector_items = []
+
+    # TextQuoteSelector
+    if "text" in data and "suffix" in selector and "prefix" in selector:
+        selector_items.append({
+            "type": "TextQuoteSelector",
+            "exact": data.get("text"),
+            "prefix": selector.get("prefix"),
+            "suffix": selector.get("suffix")
+        })
+
+    # TextPositionSelector
+    if "start" in selector and "end" in selector:
+        selector_items.append({
+            "type": "TextPositionSelector",
+            "start": selector.get("start"),
+            "end": selector.get("end")
+        })
+
+    # XPathSelector
+    if selector.get("tag"):
+        selector_items.append({
+            "type": "XPathSelector",
+            "value": f"//{selector['tag']}"
+        })
+
+    # CssSelector
+    if selector.get("style"):
+        selector_items.append({
+            "type": "CssSelector",
+            "value": selector["style"]
+        })
+
+    if selector_items:
+        wadm["target"]["selector"] = {
+            "type": "Choice",
+            "items": selector_items
+        }
+
+    scope = [
+        data[key] for key in ["note", "structure", "locator"]
+        if key in data
+    ]
+
+    if scope:
+        wadm["target"]["scope"] = scope[0] if len(scope) == 1 else scope
+
+
+    # body: identifying
+    wadm["body"].append({
+        "type": "SpecificResource",
+        "source": data["@id"],
+        "purpose": "identifying",
+        "format": "text/plain"
+    })
+
+    # body: tagging
+    if "@type" in data:
+        types = data["@type"] if isinstance(data["@type"], list) else [data["@type"]]
+        for t in types:
+            wadm["body"].append({
+                "type": "TextualBody",
+                "value": t,
+                "purpose": "tagging"
+            })
+
+    return wadm
