@@ -7,15 +7,39 @@ def generate_uuid() -> str:
     """Generate a new UUID4 in URN format."""
     return f"urn:uuid:{uuid4()}"
 
+def normalize_whitespace(text: str) -> str:
+    return re.sub(r'\s+', ' ', text)
+
 def extract_text_lxml(html_snippet: str) -> str:
     """Extract plain text from an HTML snippet using lxml."""
     try:
         tree = etree.HTML(html_snippet)
         text = ''.join(tree.xpath('//text()')).strip()
-        return re.sub(r'\s+', ' ', text)
+        return normalize_whitespace(text)
     except Exception:
         return ""
 
+def find_offset_with_context(text, prefix, suffix, doc_text, max_chars=30): 
+    pattern = re.compile(re.escape(text))
+    for match in pattern.finditer(doc_text):
+        start, end = match.start(), match.end()
+        doc_prefix = doc_text[max(0, start - max_chars):start].strip()
+        doc_suffix = doc_text[end:end + max_chars].strip()
+        if doc_prefix.endswith(prefix.strip()) and doc_suffix.startswith(suffix.strip()):
+            return start, end
+    return -1, -1
+
+def extract_context(tag, max_chars=30):
+    text = normalize_whitespace(tag.get_text())
+    parent_text = normalize_whitespace(tag.parent.get_text())
+    idx = parent_text.find(text)
+
+    if idx == -1:
+        return "", ""
+
+    prefix = parent_text[max(0, idx - max_chars):idx]
+    suffix = parent_text[idx + len(text):idx + len(text) + max_chars]
+    return prefix, suffix
 
 def clean_html(html: str, mapping: dict, remove_empty_tags: bool = True) -> str:
     """Remove HTML elements mapped to 'IGNORE' and optionally remove empty tags."""
@@ -144,9 +168,9 @@ def build_tag_style_lookup(mapping):
             for subtype, subconfig in config.items():
                 tags = subconfig.get("tags", [])
                 styles = subconfig.get("styles", [])
-                regex = subconfig.get("regex")
+                regex = subconfig.get("regex") 
                 types = subconfig.get("types", subtype)
-                class_name = subconfig.get("class")
+                class_name = subconfig.get("class", subtype if regex else None) # TODO test
 
                 if isinstance(tags, str):
                     tags = [tags]
@@ -160,7 +184,7 @@ def build_tag_style_lookup(mapping):
                 for style in styles:
                     style_lookup.setdefault(style, []).append(entry)
 
-                if regex:
+                if regex and "span" not in tags:
                     tag_lookup.setdefault("span", []).append(entry)
 
         else:
@@ -168,7 +192,7 @@ def build_tag_style_lookup(mapping):
             styles = config.get("styles", [])
             regex = config.get("regex")
             types = config.get("types", cls)
-            class_name = config.get("class")
+            class_name = config.get("class", cls if regex else None) # TODO test
 
             if isinstance(tags, str):
                 tags = [tags]
@@ -182,7 +206,7 @@ def build_tag_style_lookup(mapping):
             for style in styles:
                 style_lookup.setdefault(style, []).append(entry)
 
-            if regex:
+            if regex and "span" not in tags:
                 tag_lookup.setdefault("span", []).append(entry)
 
     return tag_lookup, style_lookup
