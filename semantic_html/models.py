@@ -1,5 +1,6 @@
 from semantic_html.utils import generate_uuid
 import re, json
+from lxml import etree
 from datetime import datetime, timezone
 
 DEFAULT_CONTEXT={
@@ -120,52 +121,6 @@ class QuotationItem(BaseGraphItem):
         type_ = kwargs.pop("type_", ["Quotation"])
         super().__init__(type_=type_, text=text, **kwargs)
 
-
-class RegexWrapper:
-    def __init__(self, mapping: dict):
-        self.regex_entries = self._extract_regex_entries(mapping)
-
-    def _extract_regex_entries(self, mapping: dict) -> list:
-        entries = []
-
-        def recurse(submapping: dict):
-            for key, value in submapping.items():
-                if key == "IGNORE":
-                    continue 
-                if isinstance(value, dict):
-                    regex_list = value.get("regex")
-                    if regex_list:
-                        class_name = value.get("class", key)
-                        value.setdefault("class", class_name)
-                        tags = value.setdefault("tags", [])
-                        if "span" not in tags:
-                            tags.append("span")
-
-                        if isinstance(regex_list, str):
-                            regex_list = [regex_list]
-
-                        for pattern in regex_list:
-                            entries.append((class_name, pattern, value.get("types", [])))
-
-                    recurse(value)
-
-        recurse(mapping)
-        return entries
-
-    def wrap(self, html: str) -> str:
-        if not self.regex_entries:
-            return html
-
-        for cls, pattern, _ in self.regex_entries:
-            html = self._wrap_pattern(html, pattern, cls)
-        return html
-
-    def _wrap_pattern(self, html: str, pattern: str, cls: str) -> str:
-        def replacer(match):
-            return f'<span class="{cls}">{match.group(0)}</span>'
-        return re.sub(pattern, replacer, html)
-    
-
 def generate_wadm_annotation(item):
     data = item.data
     selector = item.selector
@@ -203,18 +158,12 @@ def generate_wadm_annotation(item):
         })
 
     # XPathSelector
-    if selector.get("tag"):
+    if selector.get("xpath"):
         selector_items.append({
             "type": "XPathSelector",
-            "value": f"//{selector['tag']}"
+            "value": selector['xpath']
         })
 
-    # CssSelector
-    if selector.get("style"):
-        selector_items.append({
-            "type": "CssSelector",
-            "value": selector["style"]
-        })
 
     if selector_items:
         wadm["target"]["selector"] = {
@@ -229,7 +178,6 @@ def generate_wadm_annotation(item):
 
     if scope:
         wadm["target"]["scope"] = scope[0] if len(scope) == 1 else scope
-
 
     # body: identifying
     wadm["body"].append({
