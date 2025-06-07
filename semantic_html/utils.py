@@ -7,7 +7,7 @@ def generate_uuid() -> str:
     return f"urn:uuid:{uuid4()}"
 
 def normalize_whitespace(text: str) -> str:
-    return re.sub(r'\s+', ' ', text)
+    return re.sub(r'\s+', ' ', text).strip()
 
 def extract_text_lxml(node) -> str:
     """Extract plain text using lxml."""
@@ -30,6 +30,7 @@ def find_offset_with_context(text, prefix, suffix, doc_text, max_chars=30):
         doc_suffix = doc_text[end:end + max_chars].strip()
         if doc_prefix.endswith(prefix.strip()) and doc_suffix.startswith(suffix.strip()):
             return start, end
+    print(f"WARNING: Could not match string {text} in {doc_text}")
     return -1, -1
 
 def extract_context(node: etree._Element, max_chars: int = 30) -> tuple[str, str]:
