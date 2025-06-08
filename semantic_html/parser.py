@@ -3,7 +3,7 @@ from semantic_html.utils import *
 from lxml import etree, html as lxml_html
 
 
-def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = None, metadata: dict = None, rdfa: bool = False, wadm: bool = False, remove_empty_tags: bool = True) -> dict:
+def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = None, metadata: dict = None, rdfa: bool = False, wadm: bool = False, tei: bool = False, remove_empty_tags: bool = True) -> dict:
     """
     Parses a HTML note into a JSON-LD dictionary using lxml and xpath-based mapping.
     """
@@ -47,7 +47,9 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
         note_item.data['@id'] = note_uri
 
     items = [note_item.to_dict()]
+    objects = [note_item]
     wadm_result = []
+    
 
     # Track document and structure hierarchy
     current_structures = {}
@@ -121,6 +123,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                                 doc_id=doc_id, type_=types, selector=selector,
                                 metadata=metadata, wadm_meta=wadm_meta)
                 items.append(item.to_dict())
+                objects.append(item)
                 if wadm: wadm_result.append(item.to_wadm())
                 doc_ids[id(node)] = item.data['@id']
                 doc_texts[id(node)] = item.data['text']
@@ -131,6 +134,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                                     type_=types, selector=selector,
                                     metadata=metadata, wadm_meta=wadm_meta)
                 items.append(item.to_dict())
+                objects.append(item)
                 if wadm: wadm_result.append(item.to_wadm())
                 current_locator = item.data['@id']
 
@@ -148,6 +152,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                                         selector=selector,
                                         metadata=metadata, wadm_meta=wadm_meta)
                 items.append(item.to_dict())
+                objects.append(item)
                 if wadm: wadm_result.append(item.to_wadm())
                 current_structures[level] = item.data['@id']
                 current_structure = item.data['@id']
@@ -159,6 +164,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                                         selector=selector, metadata=metadata,
                                         wadm_meta=wadm_meta)
                 items.append(item.to_dict())
+                objects.append(item)
                 if wadm: wadm_result.append(item.to_wadm())
 
             elif cls == 'Annotation':
@@ -177,6 +183,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                                         type_=types, selector=selector,
                                         metadata=metadata, wadm_meta=wadm_meta)
                 items.append(item.to_dict())
+                objects.append(item)
                 if wadm: wadm_result.append(item.to_wadm())
 
     # Build results
@@ -188,5 +195,12 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
     if rdfa:
         rdfa_tree = annotate_tree_with_rdfa(cleaned_tree, mapping, context)
         result['RDFa'] = etree.tostring(rdfa_tree, encoding='unicode', method='html')
+
+    if tei:
+        tei_tree = build_tei_from_items(objects)
+        result['TEI'] = etree.tostring(
+            tei_tree, encoding='utf-8',
+            xml_declaration=True, pretty_print=True
+        ).decode('utf-8')
 
     return result

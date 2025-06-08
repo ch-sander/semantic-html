@@ -185,38 +185,91 @@ def mapping_lookup(mapping):
 
 def regex_wrap_tree(tree: etree._Element, mapping: dict) -> etree._Element:
     """
-    Wrap regex matches in spans based on mapping regex entries by serializing and reparsing.
+    Traverses the lxml tree and wraps regex matches in <span> tags,
+    mutates mapping.
     """
-    import re
-    # Collect patterns
-    patterns = []  # list of (pattern, class)
-    for cls, cfg in mapping.items():
-        if cls.startswith("@") or cls == "IGNORE":
-            continue
-        if cls == "Annotation":
-            for subtype, subcfg in cfg.items():
-                pats = subcfg.get("regex")
-                if not pats:
-                    continue
-                if isinstance(pats, str):
-                    pats = [pats]
-                for pat in pats:
-                    patterns.append((pat, cls))
-        else:
-            pats = cfg.get("regex")
-            if not pats:
+    entries = []
+
+    def _collect(subm: dict):
+        for key, v in subm.items():
+            if key == "IGNORE" or key.startswith("@"):
                 continue
-            if isinstance(pats, str):
-                pats = [pats]
-            for pat in pats:
-                patterns.append((pat, cls))
-    if not patterns:
+            if isinstance(v, dict):
+                pats = v.get("regex")
+                if pats:
+                    # normalize patterns to list
+                    if isinstance(pats, str):
+                        pats = [pats]
+
+                    # class-name and uuid4
+                    cls = v.get("class", key)
+                    v["class"] = cls
+                    rid = uuid4().hex
+                    v["rw_uuid"] = rid
+
+                    # XPath data-rw-uuid
+                    v["xpath"] = f".//span[@data-rw-uuid='{rid}']"
+
+                    for pat in pats:
+                        entries.append((re.compile(pat), cls, rid))
+
+                _collect(v)
+
+    _collect(mapping)
+    if not entries:
         return tree
-    # Serialize to HTML
-    raw_html = etree.tostring(tree, encoding='unicode', method='html')
-    # Apply regex wraps on entire HTML
-    for pat, cls in patterns:
-        repl = lambda m, cls=cls: f'<span class="{cls}">{m.group(0)}</span>'
-        raw_html = re.sub(pat, repl, raw_html)
-    # Reparse into tree
-    return lxml_html.fromstring(raw_html)
+
+    def _split_and_wrap(text: str, pattern: re.Pattern, cls: str, rid: str):
+        parts, last = [], 0
+        for m in pattern.finditer(text):
+            if m.start() > last:
+                parts.append(text[last:m.start()])
+            span = etree.Element("span", {
+                "class": cls,
+                "data-rw-uuid": rid
+            })
+            span.text = m.group(0)
+            parts.append(span)
+            last = m.end()
+        if last < len(text):
+            parts.append(text[last:])
+        return parts if len(parts) > 1 else None
+
+    def _apply(node: etree._Element, pattern: re.Pattern, cls: str, rid: str):
+        # node.text
+        if node.text:
+            wrapped = _split_and_wrap(node.text, pattern, cls, rid)
+            if wrapped:
+                node.text = ""
+                for part in wrapped:
+                    if isinstance(part, str):
+                        if len(node):
+                            node[-1].tail = (node[-1].tail or "") + part
+                        else:
+                            node.text += part
+                    else:
+                        node.append(part)
+
+        # Children and their tail
+        for child in list(node):
+            if child.tail:
+                wrapped = _split_and_wrap(child.tail, pattern, cls, rid)
+                if wrapped:
+                    child.tail = ""
+                    idx = list(node).index(child)
+                    for part in wrapped:
+                        if isinstance(part, str):
+                            if idx >= 0:
+                                node[idx].tail = (node[idx].tail or "") + part
+                            else:
+                                node.text = (node.text or "") + part
+                        else:
+                            idx += 1
+                            node.insert(idx, part)
+            _apply(child, pattern, cls, rid)
+
+    # 4 Apply to all patterns
+    for pattern, cls, rid in entries:
+        _apply(tree, pattern, cls, rid)
+
+    return tree
