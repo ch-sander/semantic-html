@@ -165,7 +165,9 @@ def mapping_lookup(mapping):
                 entry = {
                     'class': 'Annotation',
                     'types': subconfig.get('types', subtype),
-                    'regex': subconfig.get('regex')
+                    'regex': subconfig.get('regex'),
+                    'split': subconfig.get('split'),
+                    'find': subconfig.get('find')
                 }
                 for xp in xp_list:
                     xpath_lookup.setdefault(xp, []).append(entry)
@@ -178,7 +180,9 @@ def mapping_lookup(mapping):
                 entry = {
                     'class': cls,
                     'types': config.get('types', cls),
-                    'regex': config.get('regex')
+                    'regex': config.get('regex'),
+                    'split': config.get('split'),
+                    'find': config.get('find')
                 }
                 xpath_lookup.setdefault(xp, []).append(entry)
     return xpath_lookup

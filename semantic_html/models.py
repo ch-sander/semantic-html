@@ -66,6 +66,13 @@ class BaseGraphItem:
         wadm_meta = kwargs.pop("wadm_meta", None)
         self.wadm_metadata = wadm_meta.get("metadata") if wadm_meta else None
 
+        order_index = kwargs.pop("order_index", None)   # sequential per note
+        if order_index is not None:
+            self.data["orderIndex"] = int(order_index)
+
+        tree_index  = kwargs.pop("tree_index", None)
+        if tree_index is not None:
+            self.data["treeIndex"] = int(tree_index)
 
         field_map = {
             "note_id": "note",

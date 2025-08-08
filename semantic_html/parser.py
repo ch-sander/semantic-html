@@ -68,12 +68,14 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
             matches.append((node, entries, xp))
     # Determine document order for nodes
     order_map = {el: idx for idx, el in enumerate(cleaned_tree.iter())}
+    order_index = 0
     # Sort matches by document order
     matches.sort(key=lambda pair: order_map.get(pair[0], float('inf')))
     # Iterate in document order
 
     # Iterate mapping entries with xpath
-    for node, entries, xp in matches:
+    for node, entries, xp in matches:        
+        node_tree_index = order_map.get(node, None)
         # Determine text
         if isinstance(node, etree._Element):
             text = extract_text_lxml(node)
@@ -108,83 +110,126 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
             p = p.getparent()
 
         start, end = find_offset_with_context(text, prefix, suffix, doc_text)
-        selector = {'start': start, 'end': end, 'prefix': prefix, 'suffix': suffix, 'xpath':xp}
-
+        if start == -1 or end == -1:
+            continue
+        
         for m in entries:
-            if m.get('regex'):
-                selector['regex'] = m['regex']
             cls = m['class']
             types = m.get('types')
 
-            # Build items by class
-            if cls == 'Document':
-                item = DocItem(text=text, structure_id=current_structure,
-                                locator_id=current_locator, note_id=base_id,
-                                doc_id=doc_id, type_=types, selector=selector,
-                                metadata=metadata, wadm_meta=wadm_meta)
-                items.append(item.to_dict())
-                objects.append(item)
-                if wadm: wadm_result.append(item.to_wadm())
-                doc_ids[id(node)] = item.data['@id']
-                doc_texts[id(node)] = item.data['text']
+            split_pat = m.get('split')
+            find_pat = m.get('find')
+            regex = m.get('regex')
 
-            elif cls == 'Locator':
-                item = LocatorItem(text=text, structure_id=current_structure,
-                                    note_id=base_id, doc_id=doc_id,
-                                    type_=types, selector=selector,
-                                    metadata=metadata, wadm_meta=wadm_meta)
-                items.append(item.to_dict())
-                objects.append(item)
-                if wadm: wadm_result.append(item.to_wadm())
-                current_locator = item.data['@id']
+            re_matches = []
 
-            elif cls == 'Structure':
-                level = int(tag_name[1]) if tag_name and tag_name.startswith('h') and tag_name[1].isdigit() else 1
-                parent_id = None
-                for lvl in range(level-1, 0, -1):
-                    if lvl in current_structures:
-                        parent_id = current_structures[lvl]
-                        break
-                item = StructureItem(text=text, level=level, note_id=base_id,
-                                        doc_id=doc_id, type_=types,
-                                        structure_id=parent_id,
-                                        locator_id=current_locator,
-                                        selector=selector,
-                                        metadata=metadata, wadm_meta=wadm_meta)
-                items.append(item.to_dict())
-                objects.append(item)
-                if wadm: wadm_result.append(item.to_wadm())
-                current_structures[level] = item.data['@id']
-                current_structure = item.data['@id']
+            if split_pat:
+                split_parts = [p for p in re.split(split_pat, text) if p.strip()]
+            else:
+                split_parts = [text]
 
-            elif cls == 'Quotation':
-                item = QuotationItem(text=text, structure_id=current_structure,
-                                        doc_id=doc_id, locator_id=current_locator,
-                                        note_id=base_id, type_=types,
-                                        selector=selector, metadata=metadata,
-                                        wadm_meta=wadm_meta)
-                items.append(item.to_dict())
-                objects.append(item)
-                if wadm: wadm_result.append(item.to_wadm())
+            search_pos = 0
+            for part in split_parts:
+                part_offset = text.find(part, search_pos)
+                search_pos = part_offset + len(part)
+                if find_pat:
+                    for match in re.finditer(find_pat, part):
+                        match_text = match.group()
+                        local_start = part_offset + match.start()
+                        re_matches.append((local_start, match_text))
+                else:
+                    re_matches.append((part_offset, part))
 
-            elif cls == 'Annotation':
-                same_as = None
-                if isinstance(node, etree._Element):
-                    if node.tag == 'a' and node.get('href'):
-                        same_as = node.get('href')
-                    else:
-                        link = node.find('.//a')
-                        if link is not None and link.get('href'):
-                            same_as = link.get('href')
-                item = AnnotationItem(text=text, doc_id=doc_id,
-                                        structure_id=current_structure,
-                                        locator_id=current_locator,
-                                        note_id=base_id, same_as=same_as,
+            if not re_matches:
+                re_matches = [(0, text)]
+
+            for local_start, match_text in re_matches:
+                global_start = start + local_start
+                global_end = global_start + len(match_text)
+                selector = {
+                    'start': global_start,
+                    'end': global_end,
+                    'prefix': doc_text[max(0, global_start - 30):global_start],
+                    'suffix': doc_text[global_end:global_end + 30],
+                    'xpath': xp
+                }
+                if regex:
+                    selector['regex'] = regex
+
+                # Build items by class
+                if cls == 'Document':
+                    order_index += 1
+                    item = DocItem(text=match_text, structure_id=current_structure,
+                                    locator_id=current_locator, note_id=base_id,
+                                    doc_id=doc_id, type_=types, selector=selector,
+                                    metadata=metadata, wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
+                    items.append(item.to_dict())
+                    objects.append(item)
+                    if wadm: wadm_result.append(item.to_wadm())
+                    doc_ids[id(node)] = item.data['@id']
+                    doc_texts[id(node)] = item.data['text']
+
+                elif cls == 'Locator':
+                    order_index += 1
+                    item = LocatorItem(text=match_text, structure_id=current_structure,
+                                        note_id=base_id, doc_id=doc_id,
                                         type_=types, selector=selector,
-                                        metadata=metadata, wadm_meta=wadm_meta)
-                items.append(item.to_dict())
-                objects.append(item)
-                if wadm: wadm_result.append(item.to_wadm())
+                                        metadata=metadata, wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
+                    items.append(item.to_dict())
+                    objects.append(item)
+                    if wadm: wadm_result.append(item.to_wadm())
+                    current_locator = item.data['@id']
+
+                elif cls == 'Structure':
+                    order_index += 1
+                    level = int(tag_name[1]) if tag_name and tag_name.startswith('h') and tag_name[1].isdigit() else 1
+                    parent_id = None
+                    for lvl in range(level-1, 0, -1):
+                        if lvl in current_structures:
+                            parent_id = current_structures[lvl]
+                            break
+                    item = StructureItem(text=match_text, level=level, note_id=base_id,
+                                            doc_id=doc_id, type_=types,
+                                            structure_id=parent_id,
+                                            locator_id=current_locator,
+                                            selector=selector,
+                                            metadata=metadata, wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
+                    items.append(item.to_dict())
+                    objects.append(item)
+                    if wadm: wadm_result.append(item.to_wadm())
+                    current_structures[level] = item.data['@id']
+                    current_structure = item.data['@id']
+
+                elif cls == 'Quotation':
+                    order_index += 1
+                    item = QuotationItem(text=match_text, structure_id=current_structure,
+                                            doc_id=doc_id, locator_id=current_locator,
+                                            note_id=base_id, type_=types,
+                                            selector=selector, metadata=metadata,
+                                            wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
+                    items.append(item.to_dict())
+                    objects.append(item)
+                    if wadm: wadm_result.append(item.to_wadm())
+
+                elif cls == 'Annotation':
+                    same_as = None
+                    order_index += 1
+                    if isinstance(node, etree._Element):
+                        if node.tag == 'a' and node.get('href'):
+                            same_as = node.get('href')
+                        else:
+                            link = node.find('.//a')
+                            if link is not None and link.get('href'):
+                                same_as = link.get('href')
+                    item = AnnotationItem(text=match_text, doc_id=doc_id,
+                                            structure_id=current_structure,
+                                            locator_id=current_locator,
+                                            note_id=base_id, same_as=same_as,
+                                            type_=types, selector=selector,
+                                            metadata=metadata, wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
+                    items.append(item.to_dict())
+                    objects.append(item)
+                    if wadm: wadm_result.append(item.to_wadm())
 
     # Build results
     jsonld = {'@context': context, '@graph': items}
