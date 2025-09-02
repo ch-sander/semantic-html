@@ -9,6 +9,17 @@ def generate_uuid() -> str:
 def normalize_whitespace(text: str) -> str:
     return re.sub(r'\s+', ' ', text).strip()
 
+def get_same_as(node: etree._Element) -> str:
+    same_as = None
+    if isinstance(node, etree._Element):
+        if node.tag == 'a' and node.get('href'):
+            same_as = node.get('href')
+        else:
+            link = node.find('.//a')
+            if link is not None and link.get('href'):
+                same_as = link.get('href')
+    return same_as
+
 def extract_text_lxml(node) -> str:
     """Extract plain text using lxml."""
     try:

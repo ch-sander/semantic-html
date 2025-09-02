@@ -158,7 +158,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
 
                 # Build items by class
                 if cls == 'Document':
-                    order_index += 1
+                    order_index += 1                    
                     item = DocItem(text=match_text, structure_id=current_structure,
                                     locator_id=current_locator, note_id=base_id,
                                     doc_id=doc_id, type_=types, selector=selector,
@@ -171,8 +171,9 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
 
                 elif cls == 'Locator':
                     order_index += 1
+                    same_as = get_same_as(node)
                     item = LocatorItem(text=match_text, structure_id=current_structure,
-                                        note_id=base_id, doc_id=doc_id,
+                                        note_id=base_id, doc_id=doc_id, same_as=same_as,
                                         type_=types, selector=selector,
                                         metadata=metadata, wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
                     items.append(item.to_dict())
@@ -181,7 +182,8 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                     current_locator = item.data['@id']
 
                 elif cls == 'Structure':
-                    order_index += 1
+                    same_as = get_same_as(node)
+                    order_index += 1                    
                     level = int(tag_name[1]) if tag_name and tag_name.startswith('h') and tag_name[1].isdigit() else 1
                     parent_id = None
                     for lvl in range(level-1, 0, -1):
@@ -190,7 +192,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                             break
                     item = StructureItem(text=match_text, level=level, note_id=base_id,
                                             doc_id=doc_id, type_=types,
-                                            structure_id=parent_id,
+                                            structure_id=parent_id, same_as = same_as,
                                             locator_id=current_locator,
                                             selector=selector,
                                             metadata=metadata, wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
@@ -212,15 +214,8 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                     if wadm: wadm_result.append(item.to_wadm())
 
                 elif cls == 'Annotation':
-                    same_as = None
                     order_index += 1
-                    if isinstance(node, etree._Element):
-                        if node.tag == 'a' and node.get('href'):
-                            same_as = node.get('href')
-                        else:
-                            link = node.find('.//a')
-                            if link is not None and link.get('href'):
-                                same_as = link.get('href')
+                    same_as = get_same_as(node)
                     item = AnnotationItem(text=match_text, doc_id=doc_id,
                                             structure_id=current_structure,
                                             locator_id=current_locator,
@@ -233,7 +228,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
 
     # Build results
     jsonld = {'@context': context, '@graph': items}
-    result = {'JSON-LD': jsonld}
+    result = {'MAP': mapping, 'JSON-LD': jsonld}
     if wadm:
         result['WADM'] = {'@context': wadm_meta.get('@context', WADM_CONTEXT) if wadm_meta else WADM_CONTEXT,
                           '@graph': wadm_result}
