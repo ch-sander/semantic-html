@@ -3,7 +3,7 @@ from semantic_html.utils import *
 from lxml import etree, html as lxml_html
 
 
-def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = None, metadata: dict = None, rdfa: bool = False, wadm: bool = False, tei: bool = False, remove_empty_tags: bool = True) -> dict:
+def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = None, metadata: dict = None, rdfa: bool = False, wadm: bool = False, tei: bool = False, conll: bool | dict = False, remove_empty_tags: bool = True) -> dict:
     """
     Parses a HTML note into a JSON-LD dictionary using lxml and xpath-based mapping.
     """
@@ -229,9 +229,13 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
     # Build results
     jsonld = {'@context': context, '@graph': items}
     result = {'MAP': mapping, 'JSON-LD': jsonld}
+
+    
     if wadm:
         result['WADM'] = {'@context': wadm_meta.get('@context', WADM_CONTEXT) if wadm_meta else WADM_CONTEXT,
                           '@graph': wadm_result}
+
+        
     if rdfa:
         rdfa_tree = annotate_tree_with_rdfa(cleaned_tree, mapping, context)
         result['RDFa'] = etree.tostring(rdfa_tree, encoding='unicode', method='html')
@@ -242,5 +246,10 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
             tei_tree, encoding='utf-8',
             xml_declaration=True, pretty_print=True
         ).decode('utf-8')
+
+    if conll:
+        config = conll if isinstance(conll, dict) else None
+        wadm = wadm_result
+        result['CoNLL'] = wadm_to_conll(wadm, config, jsonld=jsonld)
 
     return result

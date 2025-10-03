@@ -288,3 +288,172 @@ def regex_wrap_tree(tree: etree._Element, mapping: dict) -> etree._Element:
         _apply(tree, pattern, cls, rid)
 
     return tree
+
+def tokenize(text):
+    """Simple and robust tokenization."""
+    return re.findall(r"\w+|[^\w\s]", text, re.UNICODE)
+
+
+def build_token_spans(text, tokens):
+    """Compute start and end character offsets for each token."""
+    spans = []
+    offset = 0
+    for tok in tokens:
+        start = text.find(tok, offset)
+        if start == -1:
+            raise ValueError(f"Token '{tok}' not found in text after {offset}")
+        end = start + len(tok)
+        spans.append((start, end))
+        offset = end
+    return spans
+
+
+# ---------------- Selector Normalization ----------------
+
+def _flatten_selector(sel):
+    """
+    Handle nested selector structures like refinedBy, Choice, List.
+    Always return a list of flat selectors.
+    """
+    out = []
+    if not isinstance(sel, dict):
+        return out
+
+    stype = sel.get("type")
+
+    if stype in ("TextPositionSelector", "TextQuoteSelector"):
+        out.append(sel)
+
+    elif "refinedBy" in sel:
+        out.append(sel)
+        out.extend(_flatten_selector(sel["refinedBy"]))
+
+    elif stype == "Choice":
+        for option in sel.get("items", []):
+            out.extend(_flatten_selector(option))
+
+    elif stype == "List":
+        for option in sel.get("members", []):
+            out.extend(_flatten_selector(option))
+
+    return out
+
+
+def normalize_wadm(wadm, whitelist=None, blacklist=None):
+    """
+    Normalize WADM annotations into a simpler structure:
+    - entity_type: string (from body purpose: tagging)
+    - selectors: list of selector dicts
+    """
+    normalized = []
+
+    annotations = wadm.get("annotations", [])
+    if not isinstance(annotations, list):
+        annotations = [annotations]
+
+    for ann in annotations:
+        # --- Extract entity type ---
+        entity_type = None
+        bodies = ann.get("body", [])
+        if not isinstance(bodies, list):
+            bodies = [bodies]
+
+        for b in bodies:
+            if isinstance(b, dict) and b.get("purpose") == "tagging":
+                entity_type = b.get("value")
+                break
+            if isinstance(b, str):
+                entity_type = b.split("/")[-1]
+
+        if not entity_type:
+            continue
+
+        # Apply whitelist/blacklist
+        if whitelist is not None and entity_type not in whitelist:
+            continue
+        if blacklist is not None and entity_type in blacklist:
+            continue
+
+        # --- Extract selectors ---
+        selectors = []
+        targets = ann.get("target", [])
+        if not isinstance(targets, list):
+            targets = [targets]
+
+        for t in targets:
+            if isinstance(t, dict):
+                if "selector" in t:
+                    sels = t["selector"]
+                    if not isinstance(sels, list):
+                        sels = [sels]
+                    for s in sels:
+                        selectors.extend(_flatten_selector(s))
+
+        if selectors:
+            normalized.append({"entity_type": entity_type, "selectors": selectors})
+
+    return normalized
+
+
+# ---------------- JSON-LD Text Resolver ----------------
+
+def resolve_texts(jsonld):
+    """Build a lookup from @id → text for all resources in a JSON-LD @graph."""
+    lookup = {}
+    for res in jsonld.get("@graph", []):
+        if "@id" in res and "text" in res:
+            lookup[res["@id"]] = res["text"]
+    return lookup
+
+
+# ---------------- CoNLL Conversion ----------------
+
+def _conll_from_annotations(text, annotations, max_span_tokens=None):
+    """Helper: map annotations to BIO labels for a given text."""
+    tokens = tokenize(text)
+    spans = build_token_spans(text, tokens)
+    labels = ["O"] * len(tokens)
+
+    for ann in annotations:
+        entity_type = ann["entity_type"]
+        for sel in ann["selectors"]:
+            start, end = None, None
+            if sel.get("type") == "TextPositionSelector":
+                start, end = sel.get("start"), sel.get("end")
+            elif sel.get("type") == "TextQuoteSelector":
+                exact = sel.get("exact")
+                if exact:
+                    start = text.find(exact)
+                    if start != -1:
+                        end = start + len(exact)
+
+            if start is None or end is None:
+                continue
+
+            token_indices = [i for i, (s, e) in enumerate(spans)
+                             if not (e <= start or s >= end)]
+            if not token_indices:
+                continue
+
+            # wenn max_span_tokens gesetzt ist → ganze Entity verwerfen, falls zu lang
+            if max_span_tokens is not None and len(token_indices) > max_span_tokens:
+                continue
+
+            inside = False
+            for i in token_indices:
+                tag = "B-" + entity_type if not inside else "I-" + entity_type
+                labels[i] = tag
+                inside = True
+
+    return [[(tok, lab) for tok, lab in zip(tokens, labels)]]
+
+
+
+def conll_to_string(sentences):
+    """Return sentences in CoNLL format as a string."""
+    lines = []
+    for sent in sentences:
+        for tok, lab in sent:
+            lines.append(f"{tok}\t{lab}")
+        lines.append("")  # sentence separator
+    return "\n".join(lines)

@@ -3,6 +3,7 @@ import re, json
 from lxml import etree
 from datetime import datetime, timezone
 from collections import defaultdict
+from semantic_html.utils import _conll_from_annotations, normalize_wadm, conll_to_string, resolve_texts
 
 DEFAULT_CONTEXT={
     "xsd": "http://www.w3.org/2001/XMLSchema#",
@@ -323,3 +324,54 @@ def build_tei_from_items(base_items: list[BaseGraphItem]):
         div.append(el_p)
 
     return tei_root
+
+def wadm_to_conll(wadm, config: dict = None, jsonld: dict = None):
+    """
+    Convert WADM annotations into CoNLL format.
+    - wadm: dict with 'text' + 'annotations', OR list of annotations
+    - jsonld: optional ground-truth JSON-LD, used to resolve source->text
+    - config: options (max_span_tokens, whitelist, blacklist)
+    Returns: CoNLL string
+    """
+    max_span_tokens = None
+    whitelist = None
+    blacklist = None
+
+    if config:
+        max_span_tokens = config.pop('max_span_tokens', None)
+        whitelist = config.pop('whitelist', None)
+        blacklist = config.pop('blacklist', None)
+
+    # --- case 1: dict with text+annotations
+    if isinstance(wadm, dict) and "text" in wadm and "annotations" in wadm:
+        text = wadm["text"]
+        annotations = normalize_wadm(wadm, whitelist=whitelist, blacklist=blacklist)
+        sentences = _conll_from_annotations(text, annotations, max_span_tokens)
+        return conll_to_string(sentences)
+
+    # --- case 2: list of annotations (e.g. from @graph)
+    elif isinstance(wadm, list):
+        if not jsonld:
+            raise ValueError("Need ground-truth JSON-LD to resolve source->text.")
+        lookup = resolve_texts(jsonld)
+
+        all_sentences = []
+        grouped = defaultdict(list)
+        for ann in wadm:
+            source = ann.get("target", {}).get("source")
+            if not source:
+                continue
+            grouped[source].append(ann)
+
+        for source, anns in grouped.items():
+            text = lookup.get(source)
+            if not text:
+                continue
+            anns_norm = normalize_wadm({"text": text, "annotations": anns},
+                                       whitelist=whitelist, blacklist=blacklist)
+            all_sentences.extend(_conll_from_annotations(text, anns_norm,
+                                                         max_span_tokens))
+        return conll_to_string(all_sentences)
+
+    else:
+        raise ValueError("Unsupported WADM input format.")
