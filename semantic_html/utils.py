@@ -21,47 +21,86 @@ def get_same_as(node: etree._Element) -> str:
     return same_as
 
 def extract_text_lxml(node) -> str:
-    """Extract plain text using lxml."""
+    """Extract plain text from lxml element, preserving paragraph line breaks."""
     try:
         if isinstance(node, str):
             tree = lxml_html.fromstring(node)
-            texts = tree.xpath('//text()')
         else:
-            # lxml element
-            texts = node.xpath('.//text()')
-        return normalize_whitespace(''.join(texts))
+            tree = node
+
+        block_elems = {
+            'p', 'div', 'li', 'br', 'tr', 'section', 'article',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6'
+        }
+
+        parts = []
+
+        def walk(el):
+            if el.text:
+                parts.append(el.text)
+
+            for child in el:
+                walk(child)
+                if child.tail:
+                    parts.append(child.tail)
+
+            if el.tag in block_elems and el.tag not in {'html', 'body'}:
+                parts.append('\n')
+
+        walk(tree)
+
+        text = ''.join(parts)
+
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        text = re.sub(r' *\n *', '\n', text)
+
+        return text.strip()
+
     except Exception:
         return ""
 
+
 def find_offset_with_context(text, prefix, suffix, doc_text, max_chars=30): 
     pattern = re.compile(re.escape(text))
+    norm_prefix = normalize_whitespace(prefix)
+    norm_suffix = normalize_whitespace(suffix)
+
     for match in pattern.finditer(doc_text):
         start, end = match.start(), match.end()
-        doc_prefix = doc_text[max(0, start - max_chars):start].strip()
-        doc_suffix = doc_text[end:end + max_chars].strip()
-        if doc_prefix.endswith(prefix.strip()) and doc_suffix.startswith(suffix.strip()):
+        doc_prefix = normalize_whitespace(doc_text[max(0, start - max_chars):start])
+        doc_suffix = normalize_whitespace(doc_text[end:end + max_chars])
+
+        # whitespace-tolerant Vergleich
+        if (not norm_prefix or doc_prefix.endswith(norm_prefix)) and \
+           (not norm_suffix or doc_suffix.startswith(norm_suffix)):
             return start, end
-    print(f"WARNING: Could not match string {text} in {doc_text}")
+
+    print(f"WARNING: Could not match string {repr(text)}")
     return -1, -1
 
 def extract_context(node: etree._Element, max_chars: int = 30) -> tuple[str, str]:
     """
     Extract prefix and suffix context around the node's text within its parent text.
     """
-    # Get full normalized text of the node and its parent
-    text = normalize_whitespace(''.join(node.itertext()))
-    parent = node.getparent()
-    if parent is None:
+    if node is None or node.getparent() is None:
         return "", ""
-    parent_text = normalize_whitespace(''.join(parent.itertext()))
-    idx = parent_text.find(text)
 
+    parent = node.getparent()
+    text = extract_text_lxml(node)
+    parent_text = extract_text_lxml(parent)
+
+    idx = parent_text.find(text)
     if idx == -1:
-        return "", ""
+        # Bei mehrdeutigen oder mehrfach vorkommenden Texten: auf letztes Vorkommen zurückfallen
+        idx = parent_text.rfind(text)
+        if idx == -1:
+            return "", ""
 
     prefix = parent_text[max(0, idx - max_chars):idx]
     suffix = parent_text[idx + len(text):idx + len(text) + max_chars]
     return prefix, suffix
+
 
 def clean_html(tree: etree._Element, mapping: dict, remove_empty_tags: bool = True) -> etree._Element:
     """
@@ -101,7 +140,14 @@ def clean_html(tree: etree._Element, mapping: dict, remove_empty_tags: bool = Tr
         for elem in list(tree.iter()):
             if not isinstance(elem.tag, str):
                 continue
-            if not ''.join(elem.itertext()).strip() and len(elem) == 0:
+            # never remove <br> itself
+            if elem.tag.lower() == "br":
+                continue
+            # skip elements that contain <br>
+            if elem.xpath(".//br"):
+                continue
+            # remove only truly empty elements
+            if not ''.join(elem.itertext()).strip():
                 parent = elem.getparent()
                 if parent is not None:
                     parent.remove(elem)
@@ -344,6 +390,7 @@ def normalize_wadm(wadm, whitelist=None, blacklist=None):
     Normalize WADM annotations into a simpler structure:
     - entity_type: string (from body purpose: tagging)
     - selectors: list of selector dicts
+    Handles multiple tagging values robustly (e.g. "Annotation" + "Concept").
     """
     normalized = []
 
@@ -352,27 +399,34 @@ def normalize_wadm(wadm, whitelist=None, blacklist=None):
         annotations = [annotations]
 
     for ann in annotations:
-        # --- Extract entity type ---
-        entity_type = None
+        # --- Collect all tagging labels ---
+        entity_types = []
         bodies = ann.get("body", [])
         if not isinstance(bodies, list):
             bodies = [bodies]
 
         for b in bodies:
             if isinstance(b, dict) and b.get("purpose") == "tagging":
-                entity_type = b.get("value")
-                break
-            if isinstance(b, str):
-                entity_type = b.split("/")[-1]
+                val = b.get("value")
+                if val:
+                    entity_types.append(val)
+            elif isinstance(b, str):
+                entity_types.append(b.split("/")[-1])
 
-        if not entity_type:
+        if not entity_types:
             continue
 
-        # Apply whitelist/blacklist
-        if whitelist is not None and entity_type not in whitelist:
+        # --- Apply whitelist/blacklist logic per label ---
+        valid_labels = []
+        for et in entity_types:
+            if blacklist and et in blacklist:
+                continue
+            if whitelist and et not in whitelist:
+                continue
+            valid_labels.append(et)
+        if not valid_labels:
             continue
-        if blacklist is not None and entity_type in blacklist:
-            continue
+
 
         # --- Extract selectors ---
         selectors = []
@@ -381,18 +435,22 @@ def normalize_wadm(wadm, whitelist=None, blacklist=None):
             targets = [targets]
 
         for t in targets:
-            if isinstance(t, dict):
-                if "selector" in t:
-                    sels = t["selector"]
-                    if not isinstance(sels, list):
-                        sels = [sels]
-                    for s in sels:
-                        selectors.extend(_flatten_selector(s))
+            if isinstance(t, dict) and "selector" in t:
+                sels = t["selector"]
+                if not isinstance(sels, list):
+                    sels = [sels]
+                for s in sels:
+                    selectors.extend(_flatten_selector(s))
 
-        if selectors:
-            normalized.append({"entity_type": entity_type, "selectors": selectors})
+        for label in valid_labels:
+            if selectors:
+                normalized.append({
+                    "entity_type": label,
+                    "selectors": selectors
+                })
 
     return normalized
+
 
 
 # ---------------- JSON-LD Text Resolver ----------------
@@ -435,7 +493,6 @@ def _conll_from_annotations(text, annotations, max_span_tokens=None):
             if not token_indices:
                 continue
 
-            # wenn max_span_tokens gesetzt ist → ganze Entity verwerfen, falls zu lang
             if max_span_tokens is not None and len(token_indices) > max_span_tokens:
                 continue
 
@@ -446,8 +503,6 @@ def _conll_from_annotations(text, annotations, max_span_tokens=None):
                 inside = True
 
     return [[(tok, lab) for tok, lab in zip(tokens, labels)]]
-
-
 
 def conll_to_string(sentences):
     """Return sentences in CoNLL format as a string."""

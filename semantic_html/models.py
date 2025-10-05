@@ -31,6 +31,10 @@ DEFAULT_CONTEXT={
         "@id": "hasLocator",
         "@type": "@id"
     },
+    "quotation": {
+        "@id": "inQuotation",
+        "@type": "@id"
+    },
     "sameAs": {
         "@id": "owl:sameAs",
         "@type": "@id"
@@ -79,6 +83,7 @@ class BaseGraphItem:
             "note_id": "note",
             "structure_id": "structure",
             "locator_id": "locator",
+            "quotation_id": "quotation",
             "doc_id": "doc",
             "same_as": "sameAs",
             "html": "html"
@@ -330,7 +335,7 @@ def wadm_to_conll(wadm, config: dict = None, jsonld: dict = None):
     Convert WADM annotations into CoNLL format.
     - wadm: dict with 'text' + 'annotations', OR list of annotations
     - jsonld: optional ground-truth JSON-LD, used to resolve source->text
-    - config: options (max_span_tokens, whitelist, blacklist)
+    - config: options (max_span_tokens, whitelist, blacklist, type_whitelist)
     Returns: CoNLL string
     """
     max_span_tokens = None
@@ -338,9 +343,10 @@ def wadm_to_conll(wadm, config: dict = None, jsonld: dict = None):
     blacklist = None
 
     if config:
-        max_span_tokens = config.pop('max_span_tokens', None)
-        whitelist = config.pop('whitelist', None)
-        blacklist = config.pop('blacklist', None)
+        max_span_tokens = config.get('max_span_tokens')
+        whitelist = config.get('whitelist') or []
+        blacklist = config.get('blacklist') or []
+        type_whitelist = config.get('type_whitelist') or []
 
     # --- case 1: dict with text+annotations
     if isinstance(wadm, dict) and "text" in wadm and "annotations" in wadm:
@@ -355,11 +361,36 @@ def wadm_to_conll(wadm, config: dict = None, jsonld: dict = None):
             raise ValueError("Need ground-truth JSON-LD to resolve source->text.")
         lookup = resolve_texts(jsonld)
 
+        # --- optional type whitelist
+        allowed_ids = None
+        if type_whitelist:
+            allowed_ids = {
+                res["@id"]
+                for res in jsonld.get("@graph", [])
+                if (
+                    isinstance(res.get("@type"), str) and res["@type"] in type_whitelist
+                ) or (
+                    isinstance(res.get("@type"), list) and any(t in type_whitelist for t in res["@type"])
+                )
+            }
+
         all_sentences = []
         grouped = defaultdict(list)
+        if blacklist:
+            bl = set(blacklist)
+            wadm = [
+                a for a in wadm
+                if not (
+                    (isinstance(a.get("@type"), str)  and a["@type"] in bl) or
+                    (isinstance(a.get("@type"), list) and any(t in bl for t in a["@type"]))
+                )
+            ]
         for ann in wadm:
             source = ann.get("target", {}).get("source")
             if not source:
+                continue
+            # --- Skip if source not allowed
+            if allowed_ids is not None and source not in allowed_ids:
                 continue
             grouped[source].append(ann)
 
