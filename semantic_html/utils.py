@@ -9,16 +9,26 @@ def generate_uuid() -> str:
 def normalize_whitespace(text: str) -> str:
     return re.sub(r'\s+', ' ', text).strip()
 
-def get_same_as(node: etree._Element) -> str:
-    same_as = None
-    if isinstance(node, etree._Element):
-        if node.tag == 'a' and node.get('href'):
-            same_as = node.get('href')
-        else:
-            link = node.find('.//a')
-            if link is not None and link.get('href'):
-                same_as = link.get('href')
-    return same_as
+def get_same_as(node: etree._Element, xpath: str = "self::a/@href | .//a/@href") -> str | None:
+    """
+    Extracts a URI (sameAs) from a node using XPath.
+    Default behavior matches <a href="..."> either on the node itself or in descendants.
+
+    Args:
+        node: The lxml Element to inspect.
+        xpath: XPath expression selecting the desired attribute(s).
+               Default: "self::a/@href | .//a/@href"
+
+    Returns:
+        The first matching attribute value (string) or None.
+    """
+    if not isinstance(node, etree._Element) or not xpath:
+        return None
+
+    result = node.xpath(xpath)
+    if result:
+        return result[0]
+    return None
 
 def extract_text_lxml(node) -> str:
     """Extract plain text from lxml element, preserving paragraph line breaks."""
