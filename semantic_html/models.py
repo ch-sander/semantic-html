@@ -47,6 +47,14 @@ DEFAULT_CONTEXT={
         "@id": "doco:hasLevel",
         "@type": "xsd:int"
     },
+    "orderIndex": {
+        "@id": "doco:hasSequenceNumber",
+        "@type": "xsd:int"
+    },
+    "treeIndex": {
+        "@id": "schema:position",
+        "@type": "xsd:int"
+    },
     "generatedAtTime": {
         "@id": "prov:generatedAtTime",
         "@type": "xsd:dateTime"
