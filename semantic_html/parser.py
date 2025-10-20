@@ -55,11 +55,11 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
 
     # Track document and structure hierarchy
     current_structures = {}
+    quotation_ids = {}
     doc_ids = {}
     doc_texts = {}
     current_structure = None
     current_locator = None
-    current_quotation = None
     base_id = note_item.data['@id']
 
     xpath_lookup = mapping_lookup(mapping)
@@ -104,12 +104,17 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
         doc_id = base_id
         doc_text = note_text
         p = parent_iter
-        while p is not None:
+        parent_quotation_id = None
+
+        while p is not None and (parent_quotation_id is None or doc_id == base_id):
             pid = id(p)
-            if pid in doc_ids:
-                doc_id = doc_ids[pid]
-                doc_text = doc_texts[pid]
-                break
+            if parent_quotation_id is None:
+                parent_quotation_id = quotation_ids.get(pid)
+            if doc_id == base_id:
+                maybe_doc = doc_ids.get(pid)
+                if maybe_doc is not None:
+                    doc_id = maybe_doc
+                    doc_text = doc_texts[pid]
             p = p.getparent()
 
         start, end = find_offset_with_context(text, prefix, suffix, doc_text)
@@ -165,7 +170,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                     item = DocItem(text=match_text, structure_id=current_structure,
                                     locator_id=current_locator, note_id=base_id,
                                     doc_id=doc_id, type_=types, selector=selector,
-                                    quotation_id=current_quotation,
+                                    quotation_id=parent_quotation_id,
                                     metadata=metadata, wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
                     items.append(item.to_dict())
                     objects.append(item)
@@ -179,7 +184,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                     item = LocatorItem(text=match_text, structure_id=current_structure,
                                         note_id=base_id, doc_id=doc_id, same_as=same_as,
                                         type_=types, selector=selector,
-                                        quotation_id=current_quotation,
+                                        quotation_id=parent_quotation_id,
                                         metadata=metadata, wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
                     items.append(item.to_dict())
                     objects.append(item)
@@ -199,7 +204,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                                             doc_id=doc_id, type_=types,
                                             structure_id=parent_id, same_as = same_as,
                                             locator_id=current_locator,
-                                            quotation_id=current_quotation,
+                                            quotation_id=parent_quotation_id,
                                             selector=selector,
                                             metadata=metadata, wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
                     items.append(item.to_dict())
@@ -211,13 +216,13 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                 elif cls == 'Quotation':
                     order_index += 1
                     item = QuotationItem(text=match_text, structure_id=current_structure,
-                                            doc_id=doc_id, locator_id=current_locator,
+                                            doc_id=doc_id, locator_id=current_locator, quotation_id=parent_quotation_id,
                                             note_id=base_id, type_=types,
                                             selector=selector, metadata=metadata,
                                             wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
                     items.append(item.to_dict())
                     objects.append(item)
-                    current_quotation = item.data['@id']
+                    quotation_ids[id(node)] = item.data['@id']
                     if wadm: wadm_result.append(item.to_wadm())
 
                 elif cls == 'Annotation':
@@ -226,7 +231,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
                     item = AnnotationItem(text=match_text, doc_id=doc_id,
                                             structure_id=current_structure,
                                             locator_id=current_locator,
-                                            quotation_id=current_quotation,
+                                            quotation_id=parent_quotation_id,
                                             note_id=base_id, same_as=same_as,
                                             type_=types, selector=selector,
                                             metadata=metadata, wadm_meta=wadm_meta, tree_index = node_tree_index, order_index = order_index)
