@@ -2,6 +2,13 @@ from uuid import uuid4
 from lxml import etree, html as lxml_html
 import re
 
+
+def safe_xpath(root, expr):
+    try:
+        return root.xpath(expr)
+    except etree.XPathEvalError as e:
+        raise ValueError(f"Invalid XPath '{expr}': {e}") from e
+
 def generate_uuid() -> str:
     """Generate a new UUID4 in URN format."""
     return f"urn:uuid:{uuid4()}"
@@ -25,7 +32,7 @@ def get_same_as(node: etree._Element, xpath: str = "self::a/@href | .//a/@href")
     if not isinstance(node, etree._Element) or not xpath:
         return None
 
-    result = node.xpath(xpath)
+    result = safe_xpath(node, xpath)
     if result:
         return result[0]
     return None
@@ -123,7 +130,7 @@ def clean_html(tree: etree._Element, mapping: dict, remove_empty_tags: bool = Tr
 
     # Remove nodes matching ignore xpaths
     for xp in xpaths:
-        for node in tree.xpath(xp):
+        for node in safe_xpath(tree, xp):
             parent = node.getparent()
             if parent is not None:
                 parent.remove(node)
@@ -197,7 +204,7 @@ def annotate_tree_with_rdfa(tree: etree._Element, mapping: dict, context: dict =
     xpath_lookup = mapping_lookup(mapping)
     # For each xpath and entries, set typeof on matching elements
     for xp, entries in xpath_lookup.items():
-        for node in tree.xpath(xp):
+        for node in safe_xpath(tree, xp):
             if not isinstance(node, etree._Element):
                 continue
             # If already has typeof, skip

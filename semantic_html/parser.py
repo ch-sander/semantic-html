@@ -67,7 +67,7 @@ def parse_note(html_input: str | etree._Element, mapping: dict, note_uri: str = 
     # Collect all node-entry matches
     matches = []  # list of (node, entries)
     for xp, entries in xpath_lookup.items():
-        for node in cleaned_tree.xpath(xp):
+        for node in safe_xpath(cleaned_tree,xp):
             matches.append((node, entries, xp))
     # Determine document order for nodes
     order_map = {el: idx for idx, el in enumerate(cleaned_tree.iter())}
