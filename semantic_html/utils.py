@@ -2,6 +2,23 @@ from uuid import uuid4
 from lxml import etree, html as lxml_html
 import re
 
+def serialize_context_html(el, max_len: int | None = None):
+    if el is None or not isinstance(el, etree._Element):
+        return None
+
+    html = etree.tostring(
+        el,
+        encoding="unicode",
+        method="html",
+        with_tail=False
+    )
+
+    html = normalize_whitespace(html)
+
+    if max_len is not None and len(html) > max_len:
+        html = html[:max_len].rstrip() + "…"
+
+    return html
 
 def safe_xpath(root, expr):
     try:
